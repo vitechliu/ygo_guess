@@ -1,0 +1,11 @@
+node_modules
+data
+test-results
+.env
+.env.*
+!.env.example
+.git
+.sites-runtime
+.openai
+work
+dist

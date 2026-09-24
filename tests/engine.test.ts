@@ -1,0 +1,38 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import * as E from '../server/engine.js';import {cards} from './fixtures.js';
+function room(n=3,mode:'custom'|'random'='custom',rounds=3,attempts=3){const r=E.createRoom('ABCDEF','p0','p0',{mode,rounds,attempts});for(let i=1;i<n;i++)E.join(r,'p'+i,'p'+i);r.players.forEach(p=>p.ready=true);return r;}
+function setup(r:ReturnType<typeof room>){E.startRound(r,[],true);for(let i=0;i<r.entries.length;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);}
+test('readiness, minimum size, curated empty pool and unique allocation',()=>{
+ const r=room(1);assert.throws(()=>E.startRound(r,[],true),/至少/);
+ E.join(r,'p1','p1');assert.throws(()=>E.startRound(r,[],true),/准备/);
+ const random=room(8,'random');assert.throws(()=>E.startRound(random,[],true),/题库/);assert.equal(random.round,0);E.startRound(random,cards,true);assert.equal(new Set(random.entries.map(e=>e.card?.cid)).size,8);
+});
+test('cyclic assignment, own answer privacy and waiting-player privacy',()=>{
+ const r=room();setup(r);assert.equal(r.entries[0].card?.cid,cards[2].cid);
+ for(let i=0;i<3;i++){const v=E.view(r,'p'+i,new Set());assert.equal(v.players[i].card,undefined);assert.equal(v.players.filter(p=>p.card).length,2);assert.equal(v.mySubmittedCard,undefined);assert(!JSON.stringify(v).includes('"cid":'+r.entries[i].card!.cid));}
+ E.join(r,'late','late');const v=E.view(r,'late',new Set());assert(v.players.every(p=>!p.card));assert.deepEqual(v.history,[]);assert.equal(v.players.find(p=>p.id==='late')!.waiting,true);
+});
+test('unlimited skips, wrong guesses, stale turns and final remaining player',()=>{
+ const r=room(2,'custom',1,2);setup(r);
+ const first=r.turnId;E.skip(r,'p0',first);assert.equal(r.entries[0].attempts,2);assert.equal(r.turnPlayerId,'p1');
+ assert.throws(()=>E.guess(r,'p0',cards[1],first),/回合/);
+ E.guess(r,'p1',cards[0],r.turnId);assert.equal(r.entries[1].points,1000);assert.equal(r.turnPlayerId,'p0');assert.equal(r.entries[0].turns,2);
+ E.guess(r,'p0',cards[9],r.turnId);assert.equal(r.entries[0].attempts,1);assert.equal(r.turnPlayerId,'p0');assert.equal(r.entries[0].turns,3);
+ E.guess(r,'p0',cards[9],r.turnId);assert.equal(r.phase,'match-end');assert.equal(r.players[0].score,0);assert.equal(r.history.length,1);assert(E.view(r,'p0',new Set()).players.every(p=>p.card));
+});
+test('fewer own turns produce higher points and host advances to rotated starter',()=>{
+ const r=room(2);setup(r);E.skip(r,'p0',r.turnId);E.guess(r,'p1',cards[0],r.turnId);E.guess(r,'p0',cards[1],r.turnId);
+ assert.equal(r.players[0].score,500);assert.equal(r.phase,'round-end');E.join(r,'late','late');E.startRound(r);assert.equal(r.entries.length,3);
+ for(let i=0;i<3;i++)E.submitCard(r,r.entries[i].playerId,cards[i],r.setupId);
+ assert.equal(r.turnPlayerId,'p1');assert.equal(r.players.find(p=>p.id==='late')!.score,0);
+});
+test('departures during setup reset the ring and invalidate previous setup id',()=>{
+ const r=room();E.startRound(r,[],true);const old=r.setupId;E.submitCard(r,'p0',cards[0],old);E.leave(r,'p1',new Set(['p0','p2']));assert.equal(r.entries.length,2);assert(r.entries.every(e=>!e.card&&!e.submitted));assert.notEqual(r.setupId,old);assert.throws(()=>E.submitCard(r,'p2',cards[1],old));
+ E.leave(r,'p0',new Set(['p2']));assert.equal(r.phase,'match-end');assert.equal(r.hostId,'p2');
+});
+test('departure of waiting newcomer does not reset current setup',()=>{
+ const r=room();E.startRound(r,[],true);E.submitCard(r,'p0',cards[0],r.setupId);const previous=r.setupId;E.join(r,'late','late');E.leave(r,'late',new Set());assert.equal(r.setupId,previous);assert.equal(r.entries[0].submitted,true);
+});
+test('solved player leaving still reduces current participation count',()=>{
+ const r=room(2);setup(r);E.guess(r,'p0',cards[1],r.turnId);E.leave(r,'p0',new Set(['p1']));assert.equal(r.phase,'match-end');assert.equal(r.players[0].score,1000);
+});

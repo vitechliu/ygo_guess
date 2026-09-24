@@ -1,0 +1,1 @@
+import 'dotenv/config';import { Cards } from '../server/cards.js';import { openCache } from '../server/cache.js';const cache=await openCache();try{const cards=await new Cards(cache).pool();console.log('有效精选卡牌数量：'+cards.length);if(cards.length===0)console.log('题库留空：分配模式不可开始，出题模式不受影响');}finally{await cache.close();}
