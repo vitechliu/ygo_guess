@@ -23,7 +23,12 @@ export async function createApp(options:AppOptions){
     return raw&&/^[a-f0-9]{64}$/.test(raw)?raw:null;
   };
   const getSession=async(req:any)=>{const token=tokens(req);return token?options.store.getSession(hash(token)):null;};
-  const allowed=(origin:string|undefined,host:string|undefined)=>!origin||[...(process.env.ALLOWED_ORIGINS??'').split(',').filter(Boolean),'http://'+host,'https://'+host].includes(origin);
+  const allowed=(origin:string|undefined,host:string|undefined)=>{
+    if(!origin)return true;
+    if((process.env.ALLOWED_ORIGINS??'').split(',').filter(Boolean).includes(origin))return true;
+    if(!host)return false;
+    try{return ['http://','https://'].some(scheme=>new URL(scheme+host).origin===origin);}catch{return false;}
+  };
   const rates=new Map<string,{at:number;count:number}>();
   const limit=(key:string,max=90)=>{const now=Date.now();let v=rates.get(key);if(!v||now-v.at>60000){v={at:now,count:0};rates.set(key,v);}if(rates.size>5000)for(const [k,v]of rates)if(now-v.at>60000)rates.delete(k);return ++v.count<=max;};
   app.disable('x-powered-by');

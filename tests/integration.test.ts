@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,readFile,writeFile} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import {randomUUID,createHash} from 'node:crypto';import {WebSocket} from 'ws';
+import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,readFile,writeFile} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import {request as httpRequest} from 'node:http';import {randomUUID,createHash} from 'node:crypto';import {WebSocket} from 'ws';
 import {SqliteStore} from '../server/store.js';import {Hub,parseCommand} from '../server/hub.js';import {FileCache} from '../server/cache.js';import {Cards} from '../server/cards.js';import {createApp} from '../server/app.js';import {FixtureCards,cards,session} from './fixtures.js';import type {Command,ServerMessage,RoomView} from '../shared/types.js';
 async function harness(){const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-test-'));const store=new SqliteStore(path.join(dir,'test.sqlite'));const hub=new Hub(store,new FixtureCards(),1);await hub.init();return {dir,store,hub,async close(){await hub.close();await store.close();}};}
 const cmd=(body:any)=>({...body,id:randomUUID()}) as Command;
@@ -47,6 +47,7 @@ test('real HTTP and WebSocket transport, origin guard, admin cookie and reconnec
  try{
  const getGuest=async(name:string)=>{const res=await fetch(base+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});return {cookie:res.headers.get('set-cookie')!.split(';')[0],session:(await res.json()).session};};
  const a=await getGuest('网络A'),b=await getGuest('网络B');const ca=await connect(a.cookie),cb=await connect(b.cookie);
+ const proxied=new WebSocket('ws://127.0.0.1:'+port+'/ws',{headers:{Host:'ark.example:443',Origin:'https://ark.example',Cookie:a.cookie}});sockets.push(proxied);await new Promise<void>((resolve,reject)=>{proxied.once('open',()=>resolve());proxied.once('error',reject);});
  const create=cmd({type:'create',settings:{mode:'random',rounds:1,attempts:1}});ca.ws.send(JSON.stringify(create));await ca.wait(m=>m.type==='ack'&&m.id===create.id);
  const code=app.hub.roomFor(a.session.playerId)!.code;const join=cmd({type:'join',code});cb.ws.send(JSON.stringify(join));await cb.wait(m=>m.type==='ack'&&m.id===join.id);
  const ready=cmd({type:'ready',ready:true});cb.ws.send(JSON.stringify(ready));await cb.wait(m=>m.type==='ack'&&m.id===ready.id);
@@ -54,6 +55,9 @@ test('real HTTP and WebSocket transport, origin guard, admin cookie and reconnec
  const snap=await ca.wait(m=>m.type==='snapshot'&&m.room?.phase==='guessing') as {room:RoomView};assert.equal(snap.room.players.find(p=>p.id===a.session.playerId)!.card,undefined);
  ca.ws.close();await new Promise(r=>setTimeout(r,40));const again=await connect(a.cookie);const fresh=await again.wait(m=>m.type==='snapshot'&&m.room?.phase==='guessing') as {room:RoomView};assert.equal(fresh.room.turnId,snap.room.turnId);
  const forbidden=await fetch(base+'/api/session',{method:'POST',headers:{Origin:'https://evil.invalid','Content-Type':'application/json'},body:JSON.stringify({name:'bad'})});assert.equal(forbidden.status,403);
+ const proxiedHealth=(origin:string)=>new Promise<number>((resolve,reject)=>{const request=httpRequest({host:'127.0.0.1',port,path:'/api/health',headers:{Host:'ark.example:443',Origin:origin}},response=>{response.resume();response.on('end',()=>resolve(response.statusCode??0));});request.on('error',reject);request.end();});
+ assert.equal(await proxiedHealth('https://ark.example'),200);
+ assert.equal(await proxiedHealth('https://evil.example'),403);
  assert.equal((await fetch(base+'/admin/entry?key=wrong',{redirect:'manual'})).status,403);
  const admin=await fetch(base+'/admin/entry?key=test-secret',{redirect:'manual'});assert.equal(admin.status,303);assert.equal(admin.headers.get('location'),'/admin');assert.match(admin.headers.get('set-cookie')!,/HttpOnly/);
  const cad=await connect(admin.headers.get('set-cookie')!.split(';')[0]);const admins=await cad.wait(m=>m.type==='admin-rooms');assert(!JSON.stringify(admins).includes('"cid"'));
