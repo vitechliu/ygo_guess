@@ -11,7 +11,7 @@ services:
       STORAGE: mysql
       CACHE: redis
       MYSQL_URL: "mysql://ygoguess:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}@mysql:3306/ygoguess"
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: "redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379"
       ADMIN_ENTRY_KEY: "${ADMIN_ENTRY_KEY:-}"
       COOKIE_SECURE: "${COOKIE_SECURE:-0}"
     volumes:
@@ -45,8 +45,11 @@ services:
     restart: unless-stopped
   redis:
     image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?Set REDIS_PASSWORD}"
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\""]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 3s
       retries: 5

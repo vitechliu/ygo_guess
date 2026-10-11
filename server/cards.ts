@@ -12,13 +12,13 @@ export function normalize(raw:Raw):Card {
 export class Cards implements CardProvider {
   private pending=new Map<string,Promise<any>>();
   constructor(private cache:Cache,private poolPath=process.env.CARD_POOL_PATH??'config/card-pool.json'){}
-  private async fetchCached<T>(key:string,url:string,fresh:number):Promise<{data:T;cached:boolean}> {
+  private async fetchCached<T>(key:string,url:string,fresh:number,init?:RequestInit):Promise<{data:T;cached:boolean}> {
     const old=await this.cache.get<{data:T;at:number}>(key).catch(()=>null);
     if(old&&Date.now()-old.at<fresh)return {data:old.data,cached:true};
     if(this.pending.has(key))return this.pending.get(key)!;
     const task=(async()=>{
       try{
-        const response=await fetch(url,{signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});
+        const response=await fetch(url,{...init,signal:AbortSignal.timeout(init?20000:8000),headers:{Accept:'application/json',...init?.headers}});
         if(!response.ok)throw new Error('upstream');
         const data=await response.json() as T;
         await this.cache.set(key,{data,at:Date.now()},7*86400).catch(()=>{});
@@ -43,8 +43,13 @@ export class Cards implements CardProvider {
     try{ids=JSON.parse(await readFile(this.poolPath,'utf8'));}catch{throw new GameError('精选题库文件无法读取');}
     if(!Array.isArray(ids)||ids.some(id=>!Number.isInteger(id)||id<=0))throw new GameError('精选题库格式应为卡牌密码数组');
     const cards:Card[]=[];
-    // Small batches avoid flooding the third-party service.
-    for(let i=0;i<ids.length;i+=4)cards.push(...await Promise.all(ids.slice(i,i+4).map(id=>this.card(id))));
+    // The API accepts at most 100 IDs per batch. Cache each batch for repeat rounds and offline fallback.
+    for(let i=0;i<ids.length;i+=100){
+      const batch=ids.slice(i,i+100) as number[];
+      const {data}=await this.fetchCached<Record<string,Raw>>('pool-batch:'+batch.join(','),'https://ygocdb.com/api/v0/cardset',86400*1000,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:batch})});
+      if(!data||typeof data!=='object'||Array.isArray(data))throw new GameError('精选题库查询返回异常，请稍后重试');
+      for(const id of batch){const raw=data[String(id)];if(raw){try{cards.push(normalize(raw));}catch{}}}
+    }
     return [...new Map(cards.map(c=>[c.cid,c])).values()];
   }
 }

@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,readFile} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import {randomUUID,createHash} from 'node:crypto';import {WebSocket} from 'ws';
+import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,readFile,writeFile} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import {randomUUID,createHash} from 'node:crypto';import {WebSocket} from 'ws';
 import {SqliteStore} from '../server/store.js';import {Hub,parseCommand} from '../server/hub.js';import {FileCache} from '../server/cache.js';import {Cards} from '../server/cards.js';import {createApp} from '../server/app.js';import {FixtureCards,cards,session} from './fixtures.js';import type {Command,ServerMessage,RoomView} from '../shared/types.js';
 async function harness(){const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-test-'));const store=new SqliteStore(path.join(dir,'test.sqlite'));const hub=new Hub(store,new FixtureCards(),1);await hub.init();return {dir,store,hub,async close(){await hub.close();await store.close();}};}
 const cmd=(body:any)=>({...body,id:randomUUID()}) as Command;
@@ -29,7 +29,16 @@ test('admin list has no card data, admin can transfer, remove and close',async()
 test('file cache survives reopen and card API falls back to stale cached data',async()=>{
  const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-cache-'));const cache=new FileCache(dir);await cache.set('card:100',{at:0,data:{id:100,cid:1000,text:{name:'缓存卡',types:'怪兽',desc:'text'}}},60);
  const original=global.fetch;global.fetch=async()=>{throw new Error('offline');};try{const c=await new Cards(new FileCache(dir)).card(100);assert.equal(c.name,'缓存卡');await assert.rejects(new Cards(cache).card(101),/暂时不可用/);}finally{global.fetch=original;}
- assert.deepEqual(JSON.parse(await readFile('config/card-pool.json','utf8')),[]);
+ const configured=JSON.parse(await readFile('config/card-pool.json','utf8')) as number[];assert(configured.length>=8);assert.equal(new Set(configured).size,configured.length);
+});
+test('curated pool uses 100-card batches and remains available from cache',async()=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-pool-')),poolPath=path.join(dir,'pool.json'),ids=Array.from({length:101},(_,i)=>i+1);
+ await writeFile(poolPath,JSON.stringify(ids));const cache=new FileCache(path.join(dir,'cache'));const original=global.fetch;let calls=0;
+ try{
+  global.fetch=async(url,init)=>{assert.equal(String(url),'https://ygocdb.com/api/v0/cardset');const batch=JSON.parse(String(init?.body)).ids as number[];assert(batch.length<=100);calls++;return new Response(JSON.stringify(Object.fromEntries(batch.map(id=>[id,{id,cid:id+1000,text:{name:'card '+id}}]))),{status:200});};
+  const first=await new Cards(cache,poolPath).pool();assert.equal(first.length,101);assert.equal(calls,2);
+  global.fetch=async()=>{throw new Error('offline');};const cached=await new Cards(cache,poolPath).pool();assert.equal(cached.length,101);
+ }finally{global.fetch=original;await cache.close();}
 });
 test('real HTTP and WebSocket transport, origin guard, admin cookie and reconnect snapshots',async()=>{
  const h=await harness();await h.hub.close();const app=await createApp({store:h.store,cards:new FixtureCards(),adminKey:'test-secret',hostGraceMs:1});
