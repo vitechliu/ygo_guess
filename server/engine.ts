@@ -4,7 +4,7 @@ import type { Card, RoomState, RoomView, Settings, Entry } from '../shared/types
 export class GameError extends Error {}
 export function requireGame(value: unknown, message: string): asserts value { if (!value) throw new GameError(message); }
 export const members = (r: RoomState) => r.players.filter(p => !p.left).sort((a,b) => a.seat-b.seat);
-export function system(r: RoomState, text: string) { r.chat.push({id:randomUUID(),name:'房间消息',text,time:Date.now(),system:true}); r.chat=r.chat.slice(-100); }
+export function system(r: RoomState, text: string, kind?: 'guess-correct' | 'guess-wrong') { r.chat.push({id:randomUUID(),name:'房间消息',text,time:Date.now(),system:true,...(kind?{kind}:{})}); r.chat=r.chat.slice(-100); }
 export function createRoom(code: string, playerId: string, name: string, settings: Settings): RoomState {
   return {code,hostId:playerId,settings,phase:'lobby',round:0,players:[{id:playerId,name,seat:0,score:0,ready:false,left:false}],entries:[],turnPlayerId:null,turnId:'',setupId:'',version:0,chat:[],history:[],processed:[],createdAt:Date.now()};
 }
@@ -65,10 +65,10 @@ export function guess(r: RoomState,id: string,card: Card,turnId: string) {
   if(e.card?.cid===card.cid) {
     e.status='solved'; e.points=Math.max(1,Math.round(1000/e.turns));
     r.players.find(p=>p.id===id)!.score+=e.points;
-    system(r,r.players.find(p=>p.id===id)!.name+' 猜对了，获得 '+e.points+' 分');
+    system(r,r.players.find(p=>p.id===id)!.name+' 猜对了卡牌「'+e.card!.name+'」，获得 '+e.points+' 分','guess-correct');
   } else {
     if(e.attempts===0)e.status='failed';
-    system(r,r.players.find(p=>p.id===id)!.name+' 猜测了「'+card.name+'」，未猜中'+(e.attempts===0?'，本局机会已用完':''));
+    system(r,r.players.find(p=>p.id===id)!.name+' 猜测了「'+card.name+'」，未猜中'+(e.attempts===0?'，本局机会已用完':''),'guess-wrong');
   }
   advance(r);
 }
@@ -128,7 +128,7 @@ export function view(r:RoomState,selfId:string,online:Set<string>):RoomView {
     players:r.players.map(p=>{
       const e=r.entries.find(e=>e.playerId===p.id);
       return {...p,online:online.has(p.id),waiting:r.phase!=='lobby'&&!e&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,
-        ...(participant&&e?.card&&(reveal||(r.phase==='guessing'&&p.id!==selfId))?{card:e.card}:{})};
+        ...(e?.card&&(reveal||(r.phase==='guessing'&&(!participant||p.id!==selfId)))?{card:e.card}:{})};
     }),
     chat:r.chat,
     ...(r.phase==='setting'&&participant?{nextPlayerName:r.players.find(p=>p.id===next?.playerId)?.name,mySubmittedCard:r.entries[index].submitted?next?.card:undefined}:{}),

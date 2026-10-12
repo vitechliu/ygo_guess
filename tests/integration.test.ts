@@ -32,7 +32,7 @@ test('duplicate and concurrent requests consume one opportunity; stale commands 
 test('SQLite restart preserves game, sessions, deduplication and scores',async()=>{
  const h=await harness();let r=await started(h.hub);const c=cmd({type:'guess',cardId:r.entries[0].card!.id,turnId:r.turnId});await h.hub.handle(session('a'),c);
  await h.store.putSession('hashed-token',session('a'));const filename=path.join(h.dir,'test.sqlite');await h.close();const store=new SqliteStore(filename),hub=new Hub(store,new FixtureCards());await hub.init();
- try{assert.equal(hub.roomFor('a')!.players[0].score,1000);assert.equal((await store.getSession('hashed-token'))!.playerId,'a');const before=hub.roomFor('a')!.version;await hub.handle(session('a'),c);assert.equal(hub.roomFor('a')!.version,before);assert.equal(hub.roomFor('a')!.turnPlayerId,'b');}finally{await hub.close();await store.close();}
+ try{assert.equal(hub.roomFor('a')!.players[0].score,1000);assert.equal(hub.roomFor('a')!.chat.at(-1)?.kind,'guess-correct');assert.equal((await store.getSession('hashed-token'))!.playerId,'a');const before=hub.roomFor('a')!.version;await hub.handle(session('a'),c);assert.equal(hub.roomFor('a')!.version,before);assert.equal(hub.roomFor('a')!.turnPlayerId,'b');}finally{await hub.close();await store.close();}
 });
 test('storage failure leaves live state untouched',async()=>{
  const h=await harness();try{const r=await started(h.hub);const original=h.store.saveRoom.bind(h.store);h.store.saveRoom=async()=>{throw new Error('disk unavailable');};await assert.rejects(h.hub.handle(session('a'),cmd({type:'skip',turnId:r.turnId})),/disk/);assert.equal(h.hub.roomFor('a')!.turnId,r.turnId);h.store.saveRoom=original;}finally{await h.close();}

@@ -22,3 +22,6 @@
 
 /* Let enlarged text reflow without losing controls. */
 .topbar{height:auto;min-height:86px;padding-block:18px;gap:15px;flex-wrap:wrap}.mode-option>div:last-of-type{min-width:0;flex:1}.field-label{flex-wrap:wrap}.start-button{height:auto;min-height:48px;white-space:normal;padding-block:12px}.mode-tag{flex-shrink:0}.header-right{flex-wrap:wrap}.card-caption strong{white-space:normal;overflow-wrap:anywhere}.player-name{overflow-wrap:anywhere}.form-footnote{flex-wrap:wrap}.guide-head{align-items:flex-start}
+
+.system-message.guess-correct{color:#c9efc7;background:#173b30;border:1px solid #376e51;font-weight:600}
+.system-message.guess-wrong{color:#f5c1bb;background:#42282e;border:1px solid #8a4a52;font-weight:600}
