@@ -28,7 +28,14 @@ try{
  await b.goto(base+'/?room='+code);await b.getByLabel('你的昵称').fill('游戏');await b.getByRole('button',{name:'加入牌桌',exact:true}).click();await b.getByRole('button',{name:'我准备好了'}).waitFor();
  await b.getByLabel('聊天消息').fill('准备好了吗？');await b.getByRole('button',{name:'发送消息'}).click();await a.getByRole('log').getByText('准备好了吗？',{exact:true}).waitFor();
  await b.getByRole('button',{name:'我准备好了'}).click();await waitFor(()=>snapshots.get(a)?.players.some(p=>p.name==='游戏'&&p.ready)??false,'ready');
- await a.getByRole('button',{name:'开始游戏',exact:true}).click();await a.getByRole('combobox').waitFor();check('two isolated guest sessions, readiness, lobby chat and room code');
+ assert.equal(await b.getByRole('button',{name:'保存设置'}).count(),0);
+ await a.getByRole('radio',{name:'随机分配'}).check();await a.getByLabel('房间比赛局数').fill('3');await a.getByLabel('房间每局猜测机会').fill('2');await a.getByRole('button',{name:'保存设置'}).click();
+ await waitFor(()=>snapshots.get(b)?.settings.mode==='random'&&snapshots.get(b)?.settings.rounds===3&&!snapshots.get(b)?.players.find(p=>p.name==='游戏')?.ready,'lobby settings update');
+ assert(await a.getByRole('button',{name:'开始游戏',exact:true}).isDisabled());
+ await a.getByRole('radio',{name:'好友出题'}).check();await a.getByLabel('房间比赛局数').fill('2');await a.getByLabel('房间每局猜测机会').fill('1');await a.getByRole('button',{name:'保存设置'}).click();
+ await waitFor(()=>snapshots.get(b)?.settings.mode==='custom'&&snapshots.get(b)?.settings.attempts===1,'restored lobby settings');
+ await b.getByRole('button',{name:'我准备好了'}).click();await waitFor(()=>snapshots.get(a)?.players.some(p=>p.name==='游戏'&&p.ready)??false,'ready after settings update');
+ await a.getByRole('button',{name:'开始游戏',exact:true}).click();await a.getByRole('combobox').waitFor();check('two isolated guest sessions, host lobby settings, renewed readiness, chat and room code');
  await a.getByRole('combobox').fill('青眼');await a.getByRole('option').first().waitFor();await a.getByRole('button',{name:'加载更多',exact:true}).click();
  await pick(a,targets[0].name,'确认出题',true);await pick(b,targets[1].name,'确认出题');
  await waitFor(()=>snapshots.get(a)?.phase==='guessing','guess phase');

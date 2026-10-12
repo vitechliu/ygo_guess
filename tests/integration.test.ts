@@ -3,6 +3,23 @@ import {SqliteStore} from '../server/store.js';import {Hub,parseCommand} from '.
 async function harness(){const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-test-'));const store=new SqliteStore(path.join(dir,'test.sqlite'));const hub=new Hub(store,new FixtureCards(),1);await hub.init();return {dir,store,hub,async close(){await hub.close();await store.close();}};}
 const cmd=(body:any)=>({...body,id:randomUUID()}) as Command;
 async function started(h:Hub){await h.handle(session('a'),cmd({type:'create',settings:{mode:'random',rounds:2,attempts:3}}));const r=h.roomFor('a')!;await h.handle(session('b'),cmd({type:'join',code:r.code}));await h.handle(session('b'),cmd({type:'ready',ready:true}));await h.handle(session('a'),cmd({type:'start'}));return h.roomFor('a')!;}
+test('only the host can change lobby settings and changed rules require fresh readiness',async()=>{
+ const h=await harness();try{
+  await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',rounds:2,attempts:3}}));const code=h.hub.roomFor('a')!.code;
+  await h.hub.handle(session('b'),cmd({type:'join',code}));await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));
+  const changed=cmd({type:'update-settings',settings:{mode:'random',rounds:4,attempts:2}});
+  await assert.rejects(h.hub.handle(session('b'),changed),/房主/);
+  assert.throws(()=>parseCommand({id:randomUUID(),type:'update-settings',settings:{mode:'random',rounds:21,attempts:2}}));
+  await h.hub.handle(session('a'),changed);let room=h.hub.roomFor('a')!;assert.deepEqual(room.settings,{mode:'random',rounds:4,attempts:2});assert.equal(room.players.find(p=>p.id==='b')!.ready,false);
+  assert.deepEqual((await h.store.loadRooms()).find(r=>r.code===code)?.settings,room.settings);
+  const notices=room.chat.filter(m=>m.text.includes('房主修改了规则')).length;await h.hub.handle(session('a'),changed);assert.equal(h.hub.roomFor('a')!.chat.filter(m=>m.text.includes('房主修改了规则')).length,notices);
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'start'})),/准备/);
+  await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));await h.hub.handle(session('a'),cmd({type:'update-settings',settings:{mode:'custom',rounds:2,attempts:3}}));
+  room=h.hub.roomFor('a')!;assert.equal(room.players.find(p=>p.id==='b')!.ready,false);
+  await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));await h.hub.handle(session('a'),cmd({type:'start'}));
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'update-settings',settings:{mode:'random',rounds:4,attempts:2}})),/比赛开始后/);
+ }finally{await h.close();}
+});
 test('server rejects nonhost start, wrong-turn guesses, forged permissions and malformed commands',async()=>{
  const h=await harness();try{const r=await started(h.hub);await assert.rejects(h.hub.handle(session('b'),cmd({type:'next'})),/房主/);await assert.rejects(h.hub.handle(session('b'),cmd({type:'guess',cardId:100,turnId:r.turnId})),/轮到/);await assert.rejects(h.hub.handle(session('b'),cmd({type:'admin-close',code:r.code})),/管理员/);assert.throws(()=>parseCommand({id:'x',type:'create',settings:{mode:'random',rounds:0,attempts:99}}));}finally{await h.close();}
 });

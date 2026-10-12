@@ -1,0 +1,34 @@
+import {useEffect,useState} from 'react';
+import {Settings2} from 'lucide-react';
+import {Button} from '@/components/ui/button';
+import {RadioGroup,RadioGroupItem} from '@/components/ui/radio-group';
+import type {RoomView,Settings} from '../shared/types';
+import type {Send} from './game';
+
+export function LobbySettings({room,host,send,connected}:{room:RoomView;host:boolean;send:Send;connected:boolean}){
+  const [draft,setDraft]=useState<Settings>(()=>({...room.settings}));
+  const [saving,setSaving]=useState(false);
+  useEffect(()=>setDraft({...room.settings}),[room.code,room.settings.mode,room.settings.rounds,room.settings.attempts]);
+  const changed=draft.mode!==room.settings.mode||draft.rounds!==room.settings.rounds||draft.attempts!==room.settings.attempts;
+  const valid=Number.isInteger(draft.rounds)&&draft.rounds>=1&&draft.rounds<=20&&Number.isInteger(draft.attempts)&&draft.attempts>=1&&draft.attempts<=10;
+  const save=async(e:React.FormEvent)=>{
+    e.preventDefault();
+    if(!changed||!valid||saving||!connected)return;
+    setSaving(true);
+    try{await send({type:'update-settings',settings:draft});}catch{}finally{setSaving(false);}
+  };
+  return <section className="lobby-settings" aria-label="本场规则">
+    <div className="lobby-settings-head"><h2><Settings2 size={18}/>本场规则</h2><p>{host?'开局前可以修改；保存后其他玩家需重新准备':'房主可在开局前调整规则'}</p></div>
+    {host?<form onSubmit={save} className="lobby-settings-form">
+      <fieldset disabled={!connected||saving}>
+        <div className="lobby-mode-field"><span>游戏模式</span><RadioGroup value={draft.mode} onValueChange={mode=>setDraft(s=>({...s,mode:mode as Settings['mode']}))} className="lobby-mode-options">
+          <label className={draft.mode==='custom'?'selected':''}><RadioGroupItem value="custom" id="lobby-mode-custom"/>好友出题</label>
+          <label className={draft.mode==='random'?'selected':''}><RadioGroupItem value="random" id="lobby-mode-random"/>随机分配</label>
+        </RadioGroup></div>
+        <label>比赛局数<input aria-label="房间比赛局数" type="number" min={1} max={20} required value={draft.rounds} onChange={e=>setDraft(s=>({...s,rounds:e.target.value===''?0:Number(e.target.value)}))}/></label>
+        <label>每局猜测机会<input aria-label="房间每局猜测机会" type="number" min={1} max={10} required value={draft.attempts} onChange={e=>setDraft(s=>({...s,attempts:e.target.value===''?0:Number(e.target.value)}))}/></label>
+      </fieldset>
+      <Button type="submit" variant="outline" disabled={!changed||!valid||saving||!connected}>{saving?'保存中…':'保存设置'}</Button>
+    </form>:<div className="lobby-settings-summary"><span>{room.settings.mode==='custom'?'好友出题':'随机分配'}</span><span>{room.settings.rounds} 局</span><span>每局 {room.settings.attempts} 次猜测</span></div>}
+  </section>;
+}

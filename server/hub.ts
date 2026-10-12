@@ -11,6 +11,7 @@ const code=z.string().regex(/^[A-Z2-9]{6}$/), playerId=z.string().max(64), turnI
 const settings=z.object({mode:z.enum(['custom','random']),rounds:z.number().int().min(1).max(20),attempts:z.number().int().min(1).max(10)});
 const schemas=[
   z.object({...base,type:z.literal('create'),settings}),
+  z.object({...base,type:z.literal('update-settings'),settings}),
   z.object({...base,type:z.literal('join'),code}),
   z.object({...base,type:z.literal('ready'),ready:z.boolean()}),
   ...(['start','next','leave','again','admin-list'] as const).map(type=>z.object({...base,type:z.literal(type)})),
@@ -109,6 +110,7 @@ export class Hub {
         const host=()=>E.requireGame(r.hostId===session.playerId,'只有房主可以执行此操作');
         switch(c.type){
           case 'ready':E.requireGame(r.phase==='lobby','比赛开始后无需准备');r.players.find(p=>p.id===session.playerId)!.ready=c.ready;break;
+          case 'update-settings':host();E.updateSettings(r,c.settings);break;
           case 'start':host();E.startRound(r,pool,true);break;
           case 'next':host();E.startRound(r,pool);break;
           case 'set-card':E.submitCard(r,session.playerId,card!,c.setupId);break;

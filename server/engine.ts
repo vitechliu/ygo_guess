@@ -15,6 +15,13 @@ export function join(r: RoomState, id: string, name: string) {
   r.players.push({id,name,seat:Math.max(-1,...r.players.map(p=>p.seat))+1,score:0,ready:false,left:false});
   system(r,name+' 加入了房间'+(r.phase==='lobby'?'':'，将在下一局参赛'));
 }
+export function updateSettings(r:RoomState,settings:Settings) {
+  requireGame(r.phase==='lobby','比赛开始后不能修改设置');
+  if(r.settings.mode===settings.mode&&r.settings.rounds===settings.rounds&&r.settings.attempts===settings.attempts)return;
+  r.settings=settings;
+  for(const p of members(r))if(p.id!==r.hostId)p.ready=false;
+  system(r,'房主修改了规则：'+(settings.mode==='custom'?'好友出题':'随机分配')+' · '+settings.rounds+' 局 · 每局 '+settings.attempts+' 次猜测。请重新准备');
+}
 export function startRound(r: RoomState, pool: Card[] = [], first = false) {
   const ps=members(r);
   requireGame(ps.length>=2,'至少需要2名玩家');

@@ -12,6 +12,7 @@ export interface AdminRoom { code: string; phase: Phase; round: number; hostId: 
 export interface Session { playerId: string; name: string; admin: boolean; expiresAt: number }
 export type Command =
   | { id: string; type: 'create'; settings: Settings }
+  | { id: string; type: 'update-settings'; settings: Settings }
   | { id: string; type: 'join'; code: string }
   | { id: string; type: 'ready'; ready: boolean }
   | { id: string; type: 'start' | 'next' | 'leave' | 'again' | 'admin-list' }
