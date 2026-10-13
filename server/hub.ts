@@ -14,10 +14,12 @@ const schemas=[
   z.object({...base,type:z.literal('update-settings'),settings}),
   z.object({...base,type:z.literal('join'),code}),
   z.object({...base,type:z.literal('ready'),ready:z.boolean()}),
-  ...(['start','next','leave','again','admin-list'] as const).map(type=>z.object({...base,type:z.literal(type)})),
+  ...(['start','next','leave','again','admin-list','shuffle'] as const).map(type=>z.object({...base,type:z.literal(type)})),
   z.object({...base,type:z.literal('set-card'),cardId:z.number().int().positive().max(9999999999),setupId:z.string().uuid()}),
   z.object({...base,type:z.literal('guess'),cardId:z.number().int().positive().max(9999999999),turnId}),
+  z.object({...base,type:z.literal('give-up'),turnId}),
   z.object({...base,type:z.literal('skip'),turnId}),
+  z.object({...base,type:z.literal('kick'),playerId}),
   z.object({...base,type:z.literal('chat'),text:z.string().trim().min(1).max(500)}),
   z.object({...base,type:z.literal('admin-skip'),code,turnId}),
   ...(['admin-kick','admin-transfer'] as const).map(type=>z.object({...base,type:z.literal(type),code,playerId})),
@@ -69,9 +71,9 @@ export class Hub {
   private precheck(session:Session,c:Command){
     E.requireGame(session.expiresAt>Date.now(),'会话已过期，请刷新页面');
     if(c.type.startsWith('admin-'))E.requireGame(session.admin,'需要超级管理员权限');
-    if(c.type==='guess'||c.type==='set-card'){
+    if(c.type==='guess'||c.type==='give-up'||c.type==='set-card'){
       const r=this.requireMember(session);
-      if(c.type==='guess')E.validateTurn(r,session.playerId,c.turnId);
+      if(c.type==='guess'||c.type==='give-up')E.validateTurn(r,session.playerId,c.turnId);
       else E.requireGame(r.phase==='setting'&&r.setupId===c.setupId&&r.entries.some(e=>e.playerId===session.playerId&&!e.submitted),'当前不能出题');
     }
   }
@@ -111,16 +113,19 @@ export class Hub {
         switch(c.type){
           case 'ready':E.requireGame(r.phase==='lobby','比赛开始后无需准备');r.players.find(p=>p.id===session.playerId)!.ready=c.ready;break;
           case 'update-settings':host();E.updateSettings(r,c.settings);break;
+          case 'shuffle':host();E.shuffleSeats(r);break;
           case 'start':host();E.startRound(r,pool,true);break;
           case 'next':host();E.startRound(r,pool);break;
           case 'set-card':E.submitCard(r,session.playerId,card!,c.setupId);break;
           case 'guess':E.guess(r,session.playerId,card!,c.turnId);break;
+          case 'give-up':E.giveUp(r,session.playerId,c.turnId);break;
           case 'skip':E.skip(r,session.playerId,c.turnId,r.hostId===session.playerId||session.admin);break;
+          case 'kick':host();E.requireGame(c.playerId!==session.playerId,'房主不能移除自己');E.leave(r,c.playerId,this.online(),'房主');break;
           case 'leave':E.leave(r,session.playerId,this.online());break;
           case 'again':host();E.again(r);r.createdAt=Date.now();break;
           case 'chat':r.chat.push({id:c.id,name:session.name,text:c.text,time:Date.now()});r.chat=r.chat.slice(-100);break;
           case 'admin-skip':E.skip(r,session.playerId,c.turnId,true);break;
-          case 'admin-kick':E.leave(r,c.playerId,this.online());break;
+          case 'admin-kick':E.leave(r,c.playerId,this.online(),'管理员');break;
           case 'admin-transfer':E.requireGame(E.members(r).some(p=>p.id===c.playerId)&&this.online().has(c.playerId),'请选择在线的房间成员');r.hostId=c.playerId;E.system(r,'管理员已转移房主');break;
           case 'admin-close':r.phase='closed';r.turnId='';r.turnPlayerId=null;break;
         }

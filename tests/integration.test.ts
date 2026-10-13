@@ -20,8 +20,40 @@ test('only the host can change lobby settings and changed rules require fresh re
   await assert.rejects(h.hub.handle(session('a'),cmd({type:'update-settings',settings:{mode:'random',rounds:4,attempts:2}})),/比赛开始后/);
  }finally{await h.close();}
 });
+test('host can shuffle the lobby repeatedly while readiness and persisted order stay intact',async()=>{
+ const h=await harness();try{
+  await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',rounds:2,attempts:3}}));const code=h.hub.roomFor('a')!.code;
+  await h.hub.handle(session('b'),cmd({type:'join',code}));await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));
+  await assert.rejects(h.hub.handle(session('b'),cmd({type:'shuffle'})),/房主/);
+  const original=h.hub.roomFor('a')!.players.map(p=>p.seat);
+  const first=cmd({type:'shuffle'});await h.hub.handle(session('a'),first);
+  let r=h.hub.roomFor('a')!;assert.notDeepEqual(r.players.map(p=>p.seat),original);assert(r.players.find(p=>p.id==='b')!.ready);
+  assert.equal((await h.store.loadRooms()).find(x=>x.code===code)?.players.find((p:{id:string;seat:number})=>p.id==='b')?.seat,r.players.find(p=>p.id==='b')?.seat);
+  await h.hub.handle(session('a'),first);assert.equal(h.hub.roomFor('a')!.chat.filter(m=>m.text.startsWith('房主打乱了玩家顺序')).length,1);
+  await h.hub.handle(session('a'),cmd({type:'shuffle'}));r=h.hub.roomFor('a')!;
+  assert.deepEqual(r.players.map(p=>p.seat),original);assert.equal(r.chat.filter(m=>m.text.startsWith('房主打乱了玩家顺序')).length,2);
+  await h.hub.handle(session('a'),cmd({type:'start'}));await assert.rejects(h.hub.handle(session('a'),cmd({type:'shuffle'})),/比赛开始后/);
+ }finally{await h.close();}
+});
 test('server rejects nonhost start, wrong-turn guesses, forged permissions and malformed commands',async()=>{
  const h=await harness();try{const r=await started(h.hub);await assert.rejects(h.hub.handle(session('b'),cmd({type:'next'})),/房主/);await assert.rejects(h.hub.handle(session('b'),cmd({type:'guess',cardId:100,turnId:r.turnId})),/轮到/);await assert.rejects(h.hub.handle(session('b'),cmd({type:'admin-close',code:r.code})),/管理员/);assert.throws(()=>parseCommand({id:'x',type:'create',settings:{mode:'random',rounds:0,attempts:99}}));}finally{await h.close();}
+});
+test('giving up is turn-bound and host-only kick preserves settled room state',async()=>{
+ const h=await harness();try{
+  let r=await started(h.hub);const old=r.turnId;
+  await assert.rejects(h.hub.handle(session('b'),cmd({type:'give-up',turnId:old})),/轮到/);
+  await assert.rejects(h.hub.handle(session('b'),cmd({type:'kick',playerId:'a'})),/房主/);
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'kick',playerId:'a'})),/不能移除自己/);
+  await h.hub.handle(session('a'),cmd({type:'give-up',turnId:old}));r=h.hub.roomFor('a')!;
+  assert.equal(r.entries[0].attempts,0);assert.equal(r.entries[0].status,'failed');assert.equal(r.turnPlayerId,'b');
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'give-up',turnId:old})),/回合/);
+  assert.equal((await h.store.loadRooms()).find(x=>x.code===r.code)?.entries[0].attempts,0);
+  await h.hub.handle(session('a'),cmd({type:'kick',playerId:'b'}));r=h.hub.roomFor('a')!;
+  assert.equal(r.phase,'match-end');assert.equal(r.players.find(p=>p.id==='b')?.left,true);
+  assert(r.chat.some(m=>m.text==='b 被房主移出了房间'));
+  assert.equal(h.hub.roomFor('b'),undefined);
+  assert.equal((await h.store.loadRooms()).find(x=>x.code===r.code)?.players.find((p:{id:string;left:boolean})=>p.id==='b')?.left,true);
+ }finally{await h.close();}
 });
 test('duplicate and concurrent requests consume one opportunity; stale commands cannot advance twice',async()=>{
  const h=await harness();try{let r=await started(h.hub);const original=r.turnId;const wrong=cards.find(c=>c.cid!==r.entries[0].card!.cid)!;const c=cmd({type:'guess',cardId:wrong.id,turnId:original});await Promise.all([h.hub.handle(session('a'),c),h.hub.handle(session('a'),c)]);r=h.hub.roomFor('a')!;assert.equal(r.entries[0].attempts,2);assert.equal(r.turnPlayerId,'b');

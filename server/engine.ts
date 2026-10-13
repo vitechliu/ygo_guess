@@ -22,6 +22,18 @@ export function updateSettings(r:RoomState,settings:Settings) {
   for(const p of members(r))if(p.id!==r.hostId)p.ready=false;
   system(r,'房主修改了规则：'+(settings.mode==='custom'?'好友出题':'随机分配')+' · '+settings.rounds+' 局 · 每局 '+settings.attempts+' 次猜测。请重新准备');
 }
+export function shuffleSeats(r:RoomState) {
+  requireGame(r.phase==='lobby','比赛开始后不能打乱顺序');
+  const ordered=members(r);
+  requireGame(ordered.length>=2,'至少需要2名玩家才能打乱顺序');
+  let shuffled=[...ordered];
+  do {
+    shuffled=[...ordered];
+    for(let i=shuffled.length-1;i>0;i--){const j=randomInt(i+1);[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
+  } while(shuffled.every((p,i)=>p.id===ordered[i].id));
+  shuffled.forEach((p,i)=>p.seat=i);
+  system(r,'房主打乱了玩家顺序：'+shuffled.map(p=>p.name).join(' → '));
+}
 export function startRound(r: RoomState, pool: Card[] = [], first = false) {
   const ps=members(r);
   requireGame(ps.length>=2,'至少需要2名玩家');
@@ -72,6 +84,14 @@ export function guess(r: RoomState,id: string,card: Card,turnId: string) {
   }
   advance(r);
 }
+export function giveUp(r:RoomState,id:string,turnId:string) {
+  validateTurn(r,id,turnId);
+  const e=r.entries.find(e=>e.playerId===id)!;
+  requireGame(e.status==='playing'&&e.attempts>0,'本局已结束');
+  e.attempts=0; e.status='failed'; e.points=0;
+  system(r,r.players.find(p=>p.id===id)!.name+' 放弃了本局猜题，剩余猜测机会已清零');
+  advance(r);
+}
 export function skip(r:RoomState,id:string,turnId:string,force=false) {
   validateTurn(r,id,turnId,force);
   system(r,(r.players.find(p=>p.id===r.turnPlayerId)?.name??'当前玩家')+' 的回合已'+(force?'被强制':'')+'跳过');
@@ -94,12 +114,12 @@ export function finishRound(r:RoomState,early=false) {
   r.phase=early||r.round>=r.settings.rounds?'match-end':'round-end';
   system(r,r.phase==='match-end'?'比赛结束，查看总排行榜':'本局结束，等待房主开始下一局');
 }
-export function leave(r:RoomState,id:string,online:Set<string>) {
+export function leave(r:RoomState,id:string,online:Set<string>,removedBy?:'房主'|'管理员') {
   const p=r.players.find(p=>p.id===id&&!p.left);
   requireGame(p,'该玩家已离开'); p.left=true;
   const e=r.entries.find(e=>e.playerId===id);
   if(e?.status==='playing') { e.status='left'; e.points=0; }
-  system(r,p.name+' 离开了房间');
+  system(r,p.name+(removedBy?' 被'+removedBy+'移出了房间':' 离开了房间'));
   const remaining=members(r);
   if(!remaining.length) { r.phase='closed'; r.turnPlayerId=null; r.turnId=''; return; }
   if(r.hostId===id) r.hostId=(remaining.find(p=>online.has(p.id))??remaining[0]).id;
@@ -128,7 +148,7 @@ export function view(r:RoomState,selfId:string,online:Set<string>):RoomView {
     players:r.players.map(p=>{
       const e=r.entries.find(e=>e.playerId===p.id);
       return {...p,online:online.has(p.id),waiting:r.phase!=='lobby'&&!e&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,
-        ...(e?.card&&(reveal||(r.phase==='guessing'&&(!participant||p.id!==selfId)))?{card:e.card}:{})};
+        ...(e?.card&&(reveal||(r.phase==='guessing'&&(!participant||p.id!==selfId||e.status==='solved')))?{card:e.card}:{})};
     }),
     chat:r.chat,
     ...(r.phase==='setting'&&participant?{nextPlayerName:r.players.find(p=>p.id===next?.playerId)?.name,mySubmittedCard:r.entries[index].submitted?next?.card:undefined}:{}),

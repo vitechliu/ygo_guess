@@ -15,10 +15,12 @@ export type Command =
   | { id: string; type: 'update-settings'; settings: Settings }
   | { id: string; type: 'join'; code: string }
   | { id: string; type: 'ready'; ready: boolean }
-  | { id: string; type: 'start' | 'next' | 'leave' | 'again' | 'admin-list' }
+  | { id: string; type: 'start' | 'next' | 'leave' | 'again' | 'admin-list' | 'shuffle' }
   | { id: string; type: 'set-card'; cardId: number; setupId: string }
   | { id: string; type: 'guess'; cardId: number; turnId: string }
+  | { id: string; type: 'give-up'; turnId: string }
   | { id: string; type: 'skip'; turnId: string }
+  | { id: string; type: 'kick'; playerId: string }
   | { id: string; type: 'chat'; text: string }
   | { id: string; type: 'admin-skip'; code: string; turnId: string }
   | { id: string; type: 'admin-kick' | 'admin-transfer'; code: string; playerId: string }

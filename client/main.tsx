@@ -9,13 +9,14 @@ import {api,useGame,phaseNames,type User,type Send,type Action} from './game';
 import {Home} from './Home';
 import {Room,Confirm,type Confirmation} from './Room';
 import type {AdminRoom} from '../shared/types';
+import {version as gameVersion} from '../package.json';
 import './style.css';
 function App(){
  const [user,setUser]=useState<User|null>(null),[loaded,setLoaded]=useState(false),[error,setError]=useState(''),[adminPage,setAdminPage]=useState(location.pathname==='/admin');
  const game=useGame(user);
  useEffect(()=>{api<{session:User|null}>('/api/session').then(v=>setUser(v.session)).catch(e=>setError(e.message)).finally(()=>setLoaded(true));},[]);
  const act=useCallback(async(a:Action)=>{try{await game.send(a);}catch(e){toast.error((e as Error).message);throw e;}},[game.send]);
- return <div className="app-shell"><header className="topbar"><a href="/" className="wordmark" onClick={e=>{e.preventDefault();setAdminPage(false);history.replaceState(null,'','/');}}><span className="brand-icon"><Layers3 size={21}/></span><span>YGO<span className="brand-accent">GUESS</span><small>游戏王猜卡</small></span></a><div className="header-right"><span className="edition">和朋友一起，猜出那张卡</span>{user&&<span className="identity"><span className="avatar mini">{user.name.slice(0,1)}</span>{user.name}</span>}{user?.admin&&<Button variant="ghost" onClick={()=>setAdminPage(!adminPage)}><Shield size={16}/>{adminPage?'返回游戏':'管理房间'}</Button>}</div></header>
+ return <div className="app-shell"><header className="topbar"><a href="/" className="wordmark" onClick={e=>{e.preventDefault();setAdminPage(false);history.replaceState(null,'','/');}}><span className="brand-icon"><Layers3 size={21}/></span><span>YGO<span className="brand-accent">GUESS</span><small>游戏王猜卡</small></span></a><div className="header-right"><span className="edition">和朋友一起，猜出那张卡</span>{user&&<span className="identity"><span className="avatar mini">{user.name.slice(0,1)}</span>{user.name}</span>}{user?.admin&&<Button variant="ghost" onClick={()=>setAdminPage(!adminPage)}><Shield size={16}/>{adminPage?'返回游戏':'管理房间'}</Button>}<small className="app-version" aria-label={'游戏版本 '+gameVersion}>v{gameVersion}</small></div></header>
  {loaded&&user&&!game.connected&&<div className="connection-banner" role="status"><WifiOff size={16}/>连接正在恢复，房间和猜测机会会保留。</div>}
  {!loaded?<main className="loading-screen"><Loader2 className="spin"/>正在连接牌桌…</main>:error?<main className="loading-screen"><p>{error}</p><Button onClick={()=>location.reload()}>重新连接</Button></main>:adminPage&&user?.admin?<Admin rooms={game.adminRooms} send={act} connected={game.connected}/>:game.room?<Room room={game.room} user={user!} send={act} connected={game.connected}/>:<Home user={user} setUser={setUser} send={act} connected={game.connected}/>}
  <footer className="site-footer"><span>YgoGuess <span className="footer-sep">/</span> 好问题，让答案近一点</span><a href="https://ygocdb.com/api" target="_blank" rel="noreferrer">卡牌数据与图片由百鸽提供 ↗</a></footer><Toaster position="top-center" richColors/></div>;

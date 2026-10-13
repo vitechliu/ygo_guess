@@ -7,6 +7,20 @@ test('readiness, minimum size, curated empty pool and unique allocation',()=>{
  E.join(r,'p1','p1');assert.throws(()=>E.startRound(r,[],true),/准备/);
  const random=room(8,'random');assert.throws(()=>E.startRound(random,[],true),/题库/);assert.equal(random.round,0);E.startRound(random,cards,true);assert.equal(new Set(random.entries.map(e=>e.card?.cid)).size,8);
 });
+test('lobby shuffles change seat order and drive both card assignment and turns',()=>{
+ assert.throws(()=>E.shuffleSeats(room(1)),/至少/);
+ const r=room(4);const before=E.members(r).map(p=>p.id);
+ E.shuffleSeats(r);const after=E.members(r).map(p=>p.id);
+ assert.notDeepEqual(after,before);assert.deepEqual([...after].sort(),[...before].sort());
+ assert.deepEqual(E.members(r).map(p=>p.seat),[0,1,2,3]);assert(r.players.every(p=>p.ready));
+ assert.equal(r.chat.at(-1)?.text,'房主打乱了玩家顺序：'+E.members(r).map(p=>p.name).join(' → '));
+ E.startRound(r,[],true);assert.deepEqual(r.entries.map(e=>e.playerId),after);
+ for(let i=0;i<r.entries.length;i++)E.submitCard(r,after[i],cards[i],r.setupId);
+ assert.equal(r.entries[1].card?.cid,cards[0].cid);assert.equal(r.turnPlayerId,after[0]);
+ assert.throws(()=>E.shuffleSeats(r),/比赛开始后/);
+ const random=room(3,'random');E.shuffleSeats(random);const randomOrder=E.members(random).map(p=>p.id);
+ E.startRound(random,cards,true);assert.deepEqual(random.entries.map(e=>e.playerId),randomOrder);
+});
 test('cyclic assignment, own answer privacy and waiting spectator card visibility',()=>{
  const r=room();setup(r);assert.equal(r.entries[0].card?.cid,cards[2].cid);
  for(let i=0;i<3;i++){const v=E.view(r,'p'+i,new Set());assert.equal(v.players[i].card,undefined);assert.equal(v.players.filter(p=>p.card).length,2);assert.equal(v.mySubmittedCard,undefined);assert(!JSON.stringify(v).includes('"cid":'+r.entries[i].card!.cid));}
@@ -19,10 +33,20 @@ test('unlimited skips, wrong guesses, stale turns and final remaining player',()
  const first=r.turnId;E.skip(r,'p0',first);assert.equal(r.entries[0].attempts,2);assert.equal(r.turnPlayerId,'p1');
  assert.throws(()=>E.guess(r,'p0',cards[1],first),/回合/);
  E.guess(r,'p1',cards[0],r.turnId);assert.equal(r.entries[1].points,1000);assert.equal(r.turnPlayerId,'p0');assert.equal(r.entries[0].turns,2);
+ assert.equal(E.view(r,'p1',new Set()).players[1].card?.cid,cards[0].cid);
+ assert.equal(E.view(r,'p0',new Set()).players[0].card,undefined);
  assert.equal(r.chat.at(-1)?.kind,'guess-correct');assert.equal(r.chat.at(-1)?.text,'p1 猜对了卡牌「'+cards[0].name+'」，获得 1000 分');
  E.guess(r,'p0',cards[9],r.turnId);assert.equal(r.entries[0].attempts,1);assert.equal(r.turnPlayerId,'p0');assert.equal(r.entries[0].turns,3);
  assert.equal(r.chat.at(-1)?.kind,'guess-wrong');assert.match(r.chat.at(-1)!.text,/未猜中/);
  E.guess(r,'p0',cards[9],r.turnId);assert.equal(r.phase,'match-end');assert.equal(r.players[0].score,0);assert.equal(r.history.length,1);assert(E.view(r,'p0',new Set()).players.every(p=>p.card));
+});
+test('giving up consumes all remaining attempts and removes the player from this round',()=>{
+ const r=room();setup(r);const old=r.turnId;
+ E.giveUp(r,'p0',old);
+ assert.equal(r.entries[0].attempts,0);assert.equal(r.entries[0].status,'failed');assert.equal(r.entries[0].points,0);
+ assert.equal(r.turnPlayerId,'p1');assert.match(r.chat.at(-1)!.text,/p0 放弃了本局猜题/);
+ assert.throws(()=>E.giveUp(r,'p0',old),/回合/);
+ E.skip(r,'p1',r.turnId);E.skip(r,'p2',r.turnId);assert.equal(r.turnPlayerId,'p1');
 });
 test('fewer own turns produce higher points and host advances to rotated starter',()=>{
  const r=room(2);setup(r);E.skip(r,'p0',r.turnId);E.guess(r,'p1',cards[0],r.turnId);E.guess(r,'p0',cards[1],r.turnId);

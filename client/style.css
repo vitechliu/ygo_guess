@@ -25,3 +25,9 @@
 
 .system-message.guess-correct{color:#c9efc7;background:#173b30;border:1px solid #376e51;font-weight:600}
 .system-message.guess-wrong{color:#f5c1bb;background:#42282e;border:1px solid #8a4a52;font-weight:600}
+.give-up-button{color:#efb8ae!important;border-color:#89545a!important}
+.give-up-button:hover{background:#41292e!important;color:#ffd6cf!important}
+.player-kick{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:32px;margin-top:9px;border:1px solid #68444b;border-radius:6px;background:#30242b;color:#f0b7ae;font-size:0.75rem;font-weight:600}
+.player-kick:hover{background:#493039;border-color:#ab6871;color:#ffe1db}
+.player-kick:disabled{opacity:.5}
+.app-version{margin-left:2px;color:#728391;font-size:0.6875rem;font-weight:400;letter-spacing:.04em;white-space:nowrap}
