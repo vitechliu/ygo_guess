@@ -69,6 +69,35 @@ test('SQLite restart preserves game, sessions, deduplication and scores',async()
 test('storage failure leaves live state untouched',async()=>{
  const h=await harness();try{const r=await started(h.hub);const original=h.store.saveRoom.bind(h.store);h.store.saveRoom=async()=>{throw new Error('disk unavailable');};await assert.rejects(h.hub.handle(session('a'),cmd({type:'skip',turnId:r.turnId})),/disk/);assert.equal(h.hub.roomFor('a')!.turnId,r.turnId);h.store.saveRoom=original;}finally{await h.close();}
 });
+test('joining an invitation switches rooms only after the destination is valid and saves both rooms',async()=>{
+ const h=await harness();try{
+  await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',rounds:2,attempts:3}}));const old=h.hub.roomFor('a')!.code;
+  await h.hub.handle(session('b'),cmd({type:'create',settings:{mode:'custom',rounds:2,attempts:3}}));const next=h.hub.roomFor('b')!.code;
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'join',code:'ZZZZZZ'})),/找不到/);
+  assert.equal(h.hub.roomFor('a')?.code,old);
+  const original=h.store.saveRooms.bind(h.store);h.store.saveRooms=async()=>{throw new Error('disk unavailable');};
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'join',code:next})),/disk/);
+  assert.equal(h.hub.roomFor('a')?.code,old);
+  assert.equal((await h.store.loadRooms()).find(r=>r.code===old)?.phase,'lobby');
+  h.store.saveRooms=original;
+  await h.hub.handle(session('a'),cmd({type:'join',code:next}));
+  assert.equal(h.hub.roomFor('a')?.code,next);
+  assert.equal((await h.store.loadRooms()).find(r=>r.code===old)?.phase,'closed');
+  assert.equal((await h.store.loadRooms()).find(r=>r.code===next)?.players.find((p:{id:string})=>p.id==='a')?.left,false);
+ }finally{await h.close();}
+});
+test('a kicked player can rejoin the same match with their existing score',async()=>{
+ const h=await harness();try{
+  const r=await started(h.hub);r.players.find(p=>p.id==='b')!.score=250;
+  await h.hub.handle(session('a'),cmd({type:'kick',playerId:'b'}));
+  assert.equal(h.hub.roomFor('b'),undefined);
+  await h.hub.handle(session('b'),cmd({type:'join',code:r.code}));
+  const joined=h.hub.roomFor('b')!;
+  assert.equal(joined.players.filter(p=>p.id==='b').length,1);
+  assert.equal(joined.players.find(p=>p.id==='b')?.score,250);
+  assert.equal(joined.players.find(p=>p.id==='b')?.left,false);
+ }finally{await h.close();}
+});
 test('admin list has no card data, admin can transfer, remove and close',async()=>{
  const h=await harness();try{const r=await started(h.hub);const a=session('admin',true);const list=await h.hub.handle(a,cmd({type:'admin-list'}));assert(!JSON.stringify(list).includes('"card"'));assert(!JSON.stringify(list).includes('"cid"'));
  await h.hub.handle(a,cmd({type:'admin-skip',code:r.code,turnId:r.turnId}));assert.equal(h.hub.roomFor('a')!.turnPlayerId,'b');

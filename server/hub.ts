@@ -94,7 +94,7 @@ export class Hub {
       if(this.recent.has(key))return;
       this.precheck(session,c);
       if(c.type==='admin-list')return {type:'admin-rooms',rooms:this.adminRooms()};
-      let r:RoomState;let audit:Audit|undefined;
+      let r:RoomState;let audit:Audit|undefined;let previousRoom:RoomState|undefined;
       if(c.type==='create'){
         E.requireGame(!this.roomFor(session.playerId),'请先离开当前房间');
         let roomCode='';const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -102,9 +102,11 @@ export class Hub {
         r=E.createRoom(roomCode,session.playerId,session.name,c.settings);
         E.system(r,session.name+' 创建了房间');
       }else if(c.type==='join'){
-        E.requireGame(!this.roomFor(session.playerId),'你已经在房间中了');
         const found=this.rooms.get(c.code);E.requireGame(found&&found.phase!=='closed','找不到这个房间');
+        const current=this.roomFor(session.playerId);
+        if(current?.code===c.code)return;
         r=structuredClone(found);E.join(r,session.playerId,session.name);
+        if(current){previousRoom=structuredClone(current);E.leave(previousRoom,session.playerId,this.online());previousRoom.version++;}
       }else{
         const found='code' in c?this.rooms.get(c.code):this.roomFor(session.playerId);
         E.requireGame(found&&found.phase!=='closed','房间不存在或已关闭');r=structuredClone(found);
@@ -132,7 +134,9 @@ export class Hub {
         if(c.type.startsWith('admin-'))audit={actor:session.playerId,action:c.type,target:r.code+('playerId'in c?':'+c.playerId:'')};
       }
       r.version++;r.processed.push({key,at:Date.now()});r.processed=r.processed.slice(-500);
-      await this.store.saveRoom(r,audit);
+      if(previousRoom)await this.store.saveRooms([previousRoom,r]);
+      else await this.store.saveRoom(r,audit);
+      if(previousRoom)this.rooms.set(previousRoom.code,previousRoom);
       this.rooms.set(r.code,r);this.recent.set(key,Date.now());
       if(this.recent.size>3000){for(const [k,at]of this.recent)if(at<Date.now()-3600000||this.recent.size>3000)this.recent.delete(k);}
       this.broadcast();

@@ -31,3 +31,5 @@
 .player-kick:hover{background:#493039;border-color:#ab6871;color:#ffe1db}
 .player-kick:disabled{opacity:.5}
 .app-version{margin-left:2px;color:#728391;font-size:0.6875rem;font-weight:400;letter-spacing:.04em;white-space:nowrap}
+.invite-switch{width:min(620px,92%);margin:70px auto;flex:1}.invite-switch-card{padding:30px}.invite-switch-card h1{font-size:1.6rem;margin:14px 0}.invite-switch-card p{color:#aab8c4;line-height:1.8}.invite-switch-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}.invite-switch-actions button{min-height:44px}
+@media(max-width:640px){.invite-switch{margin:32px auto}.invite-switch-card{padding:22px}.invite-switch-actions button{width:100%}}

@@ -11,9 +11,12 @@ export function createRoom(code: string, playerId: string, name: string, setting
 export function join(r: RoomState, id: string, name: string) {
   requireGame(r.phase!=='closed','房间已关闭');
   requireGame(members(r).length<8,'房间已满（最多8人）');
-  requireGame(!r.players.some(p=>p.id===id),'你已参加过这个房间，请等待新比赛或创建新房间');
-  r.players.push({id,name,seat:Math.max(-1,...r.players.map(p=>p.seat))+1,score:0,ready:false,left:false});
-  system(r,name+' 加入了房间'+(r.phase==='lobby'?'':'，将在下一局参赛'));
+  const previous=r.players.find(p=>p.id===id);
+  requireGame(!previous||previous.left,'你已经在这个房间中');
+  const seat=Math.max(-1,...r.players.map(p=>p.seat))+1;
+  if(previous)Object.assign(previous,{name,seat,ready:false,left:false});
+  else r.players.push({id,name,seat,score:0,ready:false,left:false});
+  system(r,name+(previous?' 重新加入了房间':' 加入了房间')+(r.phase==='lobby'?'':'，将在下一局参赛'));
 }
 export function updateSettings(r:RoomState,settings:Settings) {
   requireGame(r.phase==='lobby','比赛开始后不能修改设置');
@@ -141,13 +144,13 @@ export function again(r:RoomState) {
 }
 export function view(r:RoomState,selfId:string,online:Set<string>):RoomView {
   const index=r.entries.findIndex(e=>e.playerId===selfId);
-  const participant=index>=0&&!r.players.find(p=>p.id===selfId)?.left;
+  const participant=index>=0&&r.entries[index].status!=='left'&&!r.players.find(p=>p.id===selfId)?.left;
   const reveal=r.phase==='round-end'||r.phase==='match-end';
   const next=participant?r.entries[(index+1)%r.entries.length]:undefined;
   return {code:r.code,hostId:r.hostId,settings:r.settings,phase:r.phase,round:r.round,turnPlayerId:r.turnPlayerId,turnId:r.turnId,setupId:r.setupId,version:r.version,selfId,
     players:r.players.map(p=>{
       const e=r.entries.find(e=>e.playerId===p.id);
-      return {...p,online:online.has(p.id),waiting:r.phase!=='lobby'&&!e&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,
+      return {...p,online:online.has(p.id),waiting:r.phase!=='lobby'&&(!e||e.status==='left')&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,
         ...(e?.card&&(reveal||(r.phase==='guessing'&&(!participant||p.id!==selfId||e.status==='solved')))?{card:e.card}:{})};
     }),
     chat:r.chat,

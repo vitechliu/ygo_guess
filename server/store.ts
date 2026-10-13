@@ -5,7 +5,7 @@ import mysql, { type Pool } from 'mysql2/promise';
 import type { RoomState, Session } from '../shared/types.js';
 export interface Audit { actor: string; action: string; target: string }
 export interface Store {
-  loadRooms():Promise<RoomState[]>; saveRoom(room:RoomState,audit?:Audit):Promise<void>;
+  loadRooms():Promise<RoomState[]>; saveRoom(room:RoomState,audit?:Audit):Promise<void>; saveRooms(rooms:RoomState[]):Promise<void>;
   getSession(hash:string):Promise<Session|null>; putSession(hash:string,session:Session):Promise<void>; close():Promise<void>;
 }
 export class SqliteStore implements Store {
@@ -21,12 +21,14 @@ export class SqliteStore implements Store {
     this.db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
   }
   async loadRooms(){return (this.db.prepare('SELECT state FROM rooms').all() as {state:string}[]).map(r=>JSON.parse(r.state));}
-  async saveRoom(room:RoomState,audit?:Audit){
+  async saveRoom(room:RoomState,audit?:Audit){await this.saveTransaction([room],audit);}
+  async saveRooms(rooms:RoomState[]){await this.saveTransaction(rooms);}
+  private async saveTransaction(rooms:RoomState[],audit?:Audit){
     this.db.exec('BEGIN IMMEDIATE');
     try{
-      this.db.prepare('INSERT INTO rooms(code,state) VALUES(?,?) ON CONFLICT(code) DO UPDATE SET state=excluded.state').run(room.code,JSON.stringify(room));
+      const save=this.db.prepare('INSERT INTO rooms(code,state) VALUES(?,?) ON CONFLICT(code) DO UPDATE SET state=excluded.state');
       const put=this.db.prepare('INSERT INTO results(room_code,match_id,round,player_id,value) VALUES(?,?,?,?,?) ON CONFLICT(room_code,match_id,round,player_id) DO NOTHING');
-      for(const h of room.history)for(const e of h.entries)put.run(room.code,String(room.createdAt),h.round,e.playerId,JSON.stringify(e));
+      for(const room of rooms){save.run(room.code,JSON.stringify(room));for(const h of room.history)for(const e of h.entries)put.run(room.code,String(room.createdAt),h.round,e.playerId,JSON.stringify(e));}
       if(audit)this.db.prepare('INSERT INTO admin_audit(created_at,actor,action,target) VALUES(?,?,?,?)').run(Date.now(),audit.actor,audit.action,audit.target);
       this.db.exec('COMMIT');
     }catch(error){this.db.exec('ROLLBACK');throw error;}
@@ -49,11 +51,15 @@ export class MysqlStore implements Store {
     return s;
   }
   async loadRooms(){const [rows]=await this.pool.query('SELECT state FROM rooms');return (rows as {state:string}[]).map(r=>JSON.parse(r.state));}
-  async saveRoom(room:RoomState,audit?:Audit){
+  async saveRoom(room:RoomState,audit?:Audit){await this.saveTransaction([room],audit);}
+  async saveRooms(rooms:RoomState[]){await this.saveTransaction(rooms);}
+  private async saveTransaction(rooms:RoomState[],audit?:Audit){
     const c=await this.pool.getConnection();await c.beginTransaction();
     try{
-      await c.execute('INSERT INTO rooms(code,state) VALUES(?,?) ON DUPLICATE KEY UPDATE state=VALUES(state)',[room.code,JSON.stringify(room)]);
-      for(const h of room.history)for(const e of h.entries)await c.execute('INSERT IGNORE INTO results(room_code,match_id,round,player_id,value) VALUES(?,?,?,?,?)',[room.code,String(room.createdAt),h.round,e.playerId,JSON.stringify(e)]);
+      for(const room of rooms){
+        await c.execute('INSERT INTO rooms(code,state) VALUES(?,?) ON DUPLICATE KEY UPDATE state=VALUES(state)',[room.code,JSON.stringify(room)]);
+        for(const h of room.history)for(const e of h.entries)await c.execute('INSERT IGNORE INTO results(room_code,match_id,round,player_id,value) VALUES(?,?,?,?,?)',[room.code,String(room.createdAt),h.round,e.playerId,JSON.stringify(e)]);
+      }
       if(audit)await c.execute('INSERT INTO admin_audit(created_at,actor,action,target) VALUES(?,?,?,?)',[Date.now(),audit.actor,audit.action,audit.target]);
       await c.commit();
     }catch(error){await c.rollback();throw error;}finally{c.release();}

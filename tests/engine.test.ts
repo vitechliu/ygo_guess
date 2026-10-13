@@ -61,6 +61,19 @@ test('departures during setup reset the ring and invalidate previous setup id',(
 test('departure of waiting newcomer does not reset current setup',()=>{
  const r=room();E.startRound(r,[],true);E.submitCard(r,'p0',cards[0],r.setupId);const previous=r.setupId;E.join(r,'late','late');E.leave(r,'late',new Set());assert.equal(r.setupId,previous);assert.equal(r.entries[0].submitted,true);
 });
+test('a departed player can rejoin with the same identity and keep their score',()=>{
+ const r=room();r.players[1].score=500;E.startRound(r,[],true);
+ for(let i=0;i<3;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);
+ E.leave(r,'p1',new Set(['p0','p2']));
+ E.join(r,'p1','renamed');
+ assert.equal(r.players.filter(p=>p.id==='p1').length,1);
+ assert.equal(r.players[1].score,500);
+ assert.equal(r.players[1].name,'renamed');
+ assert.equal(r.entries.find(e=>e.playerId==='p1')?.status,'left');
+ assert.equal(E.view(r,'p1',new Set()).players.find(p=>p.id==='p1')?.waiting,true);
+ assert.equal(E.members(r).at(-1)?.id,'p1');
+ assert.throws(()=>E.join(r,'p1','renamed'),/已经在这个房间/);
+});
 test('solved player leaving still reduces current participation count',()=>{
  const r=room(2);setup(r);E.guess(r,'p0',cards[1],r.turnId);E.leave(r,'p0',new Set(['p1']));assert.equal(r.phase,'match-end');assert.equal(r.players[0].score,1000);
 });
