@@ -7,7 +7,10 @@ type Raw=Record<string,any>;
 export function normalize(raw:Raw):Card {
   const text=raw.text??{};
   if(!Number.isInteger(raw.id)||!Number.isInteger(raw.cid)||raw.id<=0||raw.cid<=0)throw new GameError('这张卡缺少有效标识，请选择其他卡牌');
-  return {id:raw.id,cid:raw.cid,name:raw.sc_name??text.sc_name??raw.cn_name??text.name??raw.md_name??text.md_name??raw.jp_name??text.jp_name??String(raw.id),types:text.types??'',description:[text.pdesc,text.desc].filter(Boolean).join('\n'),image:'https://cdn.233.momobako.com/ygopro/pics/'+raw.id+'.jpg!half'};
+  // Search/cardset use cn_name; the single-card endpoint puts the YGOPro name in text.name.
+  const name=[raw.cn_name,text.cn_name,text.name,raw.name,raw.sc_name,text.sc_name,raw.md_name,text.md_name,raw.jp_name,text.jp_name]
+    .find(value=>typeof value==='string'&&value.trim())?.trim()??String(raw.id);
+  return {id:raw.id,cid:raw.cid,name,types:text.types??'',description:[text.pdesc,text.desc].filter(Boolean).join('\n'),image:'https://cdn.233.momobako.com/ygopro/pics/'+raw.id+'.jpg!half'};
 }
 export class Cards implements CardProvider {
   private pending=new Map<string,Promise<any>>();
