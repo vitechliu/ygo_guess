@@ -68,7 +68,25 @@ test('item card weights select only enabled cards at their exact boundaries',()=
  assert.equal(E.drawItemCard(1344),'countdown-card');
  assert.equal(E.drawItemCard(1345),'snatch-card');
  assert.equal(E.drawItemCard(1364),'snatch-card');
- assert.throws(()=>E.drawItemCard(1365),/抽取/);
+ assert.equal(E.drawItemCard(1365),'flower-card');
+ assert.equal(E.drawItemCard(1464),'flower-card');
+ assert.equal(E.drawItemCard(1465),'mind-eye-card');
+ assert.equal(E.drawItemCard(1514),'mind-eye-card');
+ assert.equal(E.drawItemCard(1515),'time-magic-card');
+ assert.equal(E.drawItemCard(1664),'time-magic-card');
+ assert.equal(E.drawItemCard(1665),'cyclone-card');
+ assert.equal(E.drawItemCard(1814),'cyclone-card');
+ assert.equal(E.drawItemCard(1815),'storm-card');
+ assert.equal(E.drawItemCard(1864),'storm-card');
+ assert.equal(E.drawItemCard(1865),'meteor-card');
+ assert.equal(E.drawItemCard(1884),'meteor-card');
+ assert.equal(E.drawItemCard(1885),'ground-break-card');
+ assert.equal(E.drawItemCard(1984),'ground-break-card');
+ assert.equal(E.drawItemCard(1985),'eclipse-book-card');
+ assert.equal(E.drawItemCard(2004),'eclipse-book-card');
+ assert.equal(E.drawItemCard(2005),'convulsion-card');
+ assert.equal(E.drawItemCard(2024),'convulsion-card');
+ assert.throws(()=>E.drawItemCard(2025),/抽取/);
 });
 test('book of moon covers only the selected card for three minutes and expires cleanly',()=>{
  const r=room(3);setup(r);

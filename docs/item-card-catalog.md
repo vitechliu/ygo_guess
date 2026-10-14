@@ -27,3 +27,12 @@
 | 团结卡 | 团结 UNITY | 待上线 | 所有仍在猜卡的玩家剩余猜测次数各加 1。 | 权重 20；ID：`unity-card`；不会让已出局玩家恢复参赛。 |
 | 终焉卡 | [终焉的倒计时](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=5788&ope=2&request_locale=ja) | 待上线 | 从使用者当前回合之后开始，完成 20 个玩家回合时强制结束当前小局。 | 权重 5；ID：`countdown-card`；每个实际轮到并结束的玩家回合算 1 次，被禁止卡跳过的回合不计；倒计时已生效时不能再使用另一张。 |
 | 抢夺卡 | [强夺](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=4898&ope=2&request_locale=ja) | 待上线 | 夺走一名其他仍在猜卡玩家除保底 1 次外的全部剩余猜测次数，并加到自己的剩余次数中。 | 权重 20；ID：`snatch-card`；目标须至少剩余 2 次；设计者：绫奈崎。 |
+| 鲜花卡 | [鲜花女男爵](https://ygocdb.com/card/84815190) | 待上线 | 页面飘落花瓣，持续 3 分钟。 | 权重 100；ID：`flower-card`；白色同调卡框；文案“鲜花女男爵现在来为场上助兴”。 |
+| 看透卡 | [看透心灵之眼](https://ygocdb.com/card/34298391) | 待上线 | 查看所有其他玩家当前持有的道具卡列表。 | 权重 50；ID：`mind-eye-card`；紫红色陷阱卡框；使用公告公开，手牌列表仅使用者可见。 |
+| 魔术卡 | [时间魔术师](https://ygocdb.com/card/71625222) | 待上线 | 服务端投币，正面猜测次数 +1，反面 -1。 | 权重 150；ID：`time-magic-card`；反面至少保留 1 次，投币结果公开播报。 |
+| 旋风卡 | [旋风](https://ygocdb.com/card/5318639) | 待上线 | 指定场上任意一张卡牌原地翻转约 5 秒。 | 权重 150；ID：`cyclone-card`；可以选择自己的卡牌。 |
+| 风暴卡 | [大风暴](https://ygocdb.com/card/19613556) | 待上线 | 场上所有卡牌原地剧烈翻转约 5 秒。 | 权重 50；ID：`storm-card`。 |
+| 陨石卡 | [原始生命态 尼比鲁](https://ygocdb.com/card/27204311) | 待上线 | 随机一名场上玩家的卡牌出现陨石坠落爆炸。 | 权重 20；ID：`meteor-card`；约 4.5 秒后结束。 |
+| 地碎卡 | [地碎](https://ygocdb.com/card/97169186) | 待上线 | 剩余猜测次数最少的一名场上玩家，其卡图出现裂痕 5 分钟。 | 权重 100；ID：`ground-break-card`；最少次数并列时随机选一名。 |
+| 日书卡 | [日全食之书](https://ygocdb.com/card/35480699) | 待上线 | 全部场上卡牌盖放 1 分钟，遮住卡图、卡名和放大入口。 | 权重 20；ID：`eclipse-book-card`；沿用月书卡背。 |
+| 天变卡 | [天变地异](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=5392&ope=2&request_locale=ja) | 待上线 | 每位场上玩家随机获得旋风、风暴、陨石、火球、外神、地碎或雷击卡中的一张。 | 权重 20；ID：`convulsion-card`；分别加入各自私有手牌，等本人回合使用。 |

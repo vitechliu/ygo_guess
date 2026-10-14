@@ -100,4 +100,40 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
     id: 'snatch-card', name: '抢夺卡', category: 'spell', reference: '强夺',
     image: '/snatch-item-card.webp', description: '指定一名至少还有 2 次猜测机会的其他玩家，夺走他除最后 1 次外的所有机会。（设计者：绫奈崎）', timing: 'own-turn', weight: 20,
   },
+  'flower-card': {
+    id: 'flower-card', name: '鲜花卡', category: 'synchro', reference: '鲜花女男爵',
+    image: '/flower-item-card.webp', description: '鲜花女男爵现在来为场上助兴。', timing: 'own-turn', weight: 100,
+  },
+  'mind-eye-card': {
+    id: 'mind-eye-card', name: '看透卡', category: 'trap', reference: '看透心灵之眼',
+    image: '/mind-eye-item-card.webp', description: '查看其他玩家现在持有的道具卡。', timing: 'own-turn', weight: 50,
+  },
+  'time-magic-card': {
+    id: 'time-magic-card', name: '魔术卡', category: 'monster', reference: '时间魔术师',
+    image: '/time-magic-item-card.webp', description: '抛一枚硬币：正面增加 1 次猜测机会，反面减少 1 次，但至少保留 1 次。', timing: 'own-turn', weight: 150,
+  },
+  'cyclone-card': {
+    id: 'cyclone-card', name: '旋风卡', category: 'spell', reference: '旋风',
+    image: '/cyclone-item-card.webp', description: '指定场上一张卡牌，让它原地翻转几秒。', timing: 'own-turn', weight: 150,
+  },
+  'storm-card': {
+    id: 'storm-card', name: '风暴卡', category: 'spell', reference: '大风暴',
+    image: '/storm-item-card.webp', description: '场上所有卡牌一起剧烈翻转几秒。', timing: 'own-turn', weight: 50,
+  },
+  'meteor-card': {
+    id: 'meteor-card', name: '陨石卡', category: 'monster', reference: '原始生命态 尼比鲁',
+    image: '/meteor-item-card.webp', description: '随机一张卡牌会迎来陨石坠落。', timing: 'own-turn', weight: 20,
+  },
+  'ground-break-card': {
+    id: 'ground-break-card', name: '地碎卡', category: 'spell', reference: '地碎',
+    image: '/ground-break-item-card.webp', description: '猜测机会最少的一名玩家，他的卡牌会出现裂痕，持续 5 分钟。', timing: 'own-turn', weight: 100,
+  },
+  'eclipse-book-card': {
+    id: 'eclipse-book-card', name: '日书卡', category: 'spell', reference: '日全食之书',
+    image: '/eclipse-book-item-card.webp', description: '把场上所有卡牌盖起来，持续 1 分钟。', timing: 'own-turn', weight: 20,
+  },
+  'convulsion-card': {
+    id: 'convulsion-card', name: '天变卡', category: 'spell', reference: '天变地异',
+    image: '/convulsion-item-card.webp', description: '所有玩家随机获得一张灾难卡，留到各自回合使用。', timing: 'own-turn', weight: 20,
+  },
 };

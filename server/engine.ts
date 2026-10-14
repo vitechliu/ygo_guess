@@ -8,6 +8,7 @@ export function requireGame(value: unknown, message: string): asserts value { if
 export const members = (r: RoomState) => r.players.filter(p => !p.left).sort((a,b) => a.seat-b.seat);
 const drawable=Object.values(ITEM_CARDS).filter(card=>card.weight>0);
 const totalWeight=drawable.reduce((sum,card)=>sum+card.weight,0);
+const DISASTER_CARDS:ItemCardId[]=['cyclone-card','storm-card','meteor-card','fireball-card','outer-entity-card','ground-break-card','lightning-card'];
 const DEBUG_CARDS:Card[]=[
   {id:900000001,cid:900000001,name:'调试小龙',types:'调试卡',description:'本地道具卡测试用。',image:'/test-item-card.webp'},
   {id:900000002,cid:900000002,name:'调试魔法使',types:'调试卡',description:'本地道具卡测试用。',image:'/prohibition-item-card.webp'},
@@ -63,6 +64,8 @@ export function expireVisualEffects(r:RoomState,now=Date.now()) {
   if(r.visualEffects.masks&&r.visualEffects.masks.endsAt<=now){delete r.visualEffects.masks;changed=true;}
   if(r.visualEffects.lightning&&r.visualEffects.lightning.endsAt<=now){delete r.visualEffects.lightning;changed=true;}
   if(r.visualEffects.distortion&&r.visualEffects.distortion.endsAt<=now){delete r.visualEffects.distortion;changed=true;}
+  if(r.visualEffects.flowers&&r.visualEffects.flowers.endsAt<=now){delete r.visualEffects.flowers;changed=true;}
+  if(r.visualEffects.storm&&r.visualEffects.storm.endsAt<=now){delete r.visualEffects.storm;changed=true;}
   if(r.visualEffects.fireballs){
     for(const [playerId,effect] of Object.entries(r.visualEffects.fireballs))if(effect.endsAt<=now){delete r.visualEffects.fireballs[playerId];changed=true;}
     if(!Object.keys(r.visualEffects.fireballs).length)delete r.visualEffects.fireballs;
@@ -75,9 +78,15 @@ export function expireVisualEffects(r:RoomState,now=Date.now()) {
     for(const [playerId,effect] of Object.entries(r.visualEffects.clownNames))if(effect.endsAt<=now){delete r.visualEffects.clownNames[playerId];changed=true;}
     if(!Object.keys(r.visualEffects.clownNames).length)delete r.visualEffects.clownNames;
   }
+  for(const key of ['cyclones','meteors','cracks'] as const){
+    const effects=r.visualEffects[key];
+    if(!effects)continue;
+    for(const [playerId,effect] of Object.entries(effects))if(effect.endsAt<=now){delete effects[playerId];changed=true;}
+    if(!Object.keys(effects).length)delete r.visualEffects[key];
+  }
   return changed;
 }
-export function system(r: RoomState, text: string, kind?: Chat['kind']) { r.chat.push({id:randomUUID(),name:'房间消息',text,time:Date.now(),system:true,...(kind?{kind}:{})}); r.chat=r.chat.slice(-100); }
+export function system(r: RoomState, text: string, kind?: Chat['kind'], recipientPlayerId?:string) { r.chat.push({id:randomUUID(),name:'房间消息',text,time:Date.now(),system:true,...(kind?{kind}:{}),...(recipientPlayerId?{recipientPlayerId}:{})}); r.chat=r.chat.slice(-100); }
 export function createRoom(code: string, playerId: string, name: string, settings: Settings): RoomState {
   return {code,hostId:playerId,settings,phase:'lobby',round:0,players:[{id:playerId,name,seat:0,score:0,ready:false,left:false}],entries:[],turnPlayerId:null,turnId:'',setupId:'',version:0,chat:[],history:[],processed:[],createdAt:Date.now()};
 }
@@ -166,6 +175,7 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
   else if(card.id==='snatch-card')requireGame(target&&target.playerId!==id&&target.status==='playing'&&target.attempts>=2&&members(r).some(p=>p.id===targetPlayerId),'请选择至少还有 2 次猜测机会的其他玩家');
   else if(card.id==='clown-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&members(r).some(p=>p.id===targetPlayerId),'请选择本局的其他玩家');
   else if(card.id==='fireball-card'||card.id==='god-rage-card'||card.id==='moon-book-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&target.card&&members(r).some(p=>p.id===targetPlayerId),'请选择场上有卡牌的其他玩家');
+  else if(card.id==='cyclone-card')requireGame(target&&target.status!=='left'&&target.card&&members(r).some(p=>p.id===targetPlayerId),'请选择场上有卡牌的玩家');
   else if(card.id==='reborn-card')requireGame(target&&target.playerId!==id&&target.status==='failed'&&target.failedByGuess&&target.attempts===0&&members(r).some(p=>p.id===targetPlayerId)&&online.has(targetPlayerId!),'请选择在线且因猜测次数用完而失败的其他玩家');
   else if(card.id==='hint-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&members(r).some(p=>p.id===targetPlayerId)&&online.has(targetPlayerId!),'请选择在线的其他玩家');
   else requireGame(!targetPlayerId,'这张道具卡不需要指定玩家');
@@ -277,6 +287,68 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
       system(r,name+'对 '+r.players.find(p=>p.id===targetPlayerId)!.name+' 使用了抢夺卡，夺走了 '+stolen+' 次猜测机会','item-card');
       break;
     }
+    case 'flower-card':
+      r.visualEffects??={};
+      r.visualEffects.flowers={id:randomUUID(),endsAt:Date.now()+180000};
+      system(r,name+'使用了鲜花卡，鲜花女男爵现在来为场上助兴','item-card');
+      break;
+    case 'mind-eye-card': {
+      const otherHands=members(r).filter(player=>player.id!==id).map(player=>{
+        const hand=r.entries.find(entry=>entry.playerId===player.id)?.itemCards??[];
+        return player.name+'：'+(hand.length?hand.map(item=>ITEM_CARDS[item.cardId]?.name??'未知道具卡').join('、'):'没有道具卡');
+      });
+      system(r,name+'使用了看透卡','item-card');
+      system(r,'看透卡看到的手牌：'+otherHands.join('；'),'item-card',id);
+      break;
+    }
+    case 'time-magic-card': {
+      const heads=randomInt(2)===0;
+      const previous=e.attempts;
+      e.attempts=heads?e.attempts+1:Math.max(1,e.attempts-1);
+      system(r,name+'使用了魔术卡，硬币是'+(heads?'正面，猜测机会增加 1 次':'反面，猜测机会'+(previous===1?'保持 1 次':'减少 1 次')),'item-card');
+      break;
+    }
+    case 'cyclone-card':
+      r.visualEffects??={};r.visualEffects.cyclones??={};
+      r.visualEffects.cyclones[target!.playerId]={id:randomUUID(),endsAt:Date.now()+5000};
+      system(r,name+'对 '+r.players.find(player=>player.id===targetPlayerId)!.name+' 的卡牌使用了旋风卡','item-card');
+      break;
+    case 'storm-card':
+      r.visualEffects??={};r.visualEffects.storm={id:randomUUID(),endsAt:Date.now()+5000};
+      system(r,name+'使用了风暴卡，场上所有卡牌开始翻转','item-card');
+      break;
+    case 'meteor-card': {
+      const candidates=r.entries.filter(entry=>entry.status!=='left'&&entry.card&&members(r).some(player=>player.id===entry.playerId));
+      requireGame(candidates.length>0,'场上没有可选的卡牌');
+      const hit=candidates[randomInt(candidates.length)];
+      r.visualEffects??={};r.visualEffects.meteors??={};
+      r.visualEffects.meteors[hit.playerId]={id:randomUUID(),endsAt:Date.now()+4500};
+      system(r,name+'使用了陨石卡，陨石落在 '+r.players.find(player=>player.id===hit.playerId)!.name+' 的卡牌上','item-card');
+      break;
+    }
+    case 'ground-break-card': {
+      const candidates=r.entries.filter(entry=>entry.status!=='left'&&entry.card&&members(r).some(player=>player.id===entry.playerId));
+      requireGame(candidates.length>0,'场上没有可选的卡牌');
+      const minimum=Math.min(...candidates.map(entry=>entry.attempts));
+      const tied=candidates.filter(entry=>entry.attempts===minimum);
+      const hit=tied[randomInt(tied.length)];
+      r.visualEffects??={};r.visualEffects.cracks??={};
+      r.visualEffects.cracks[hit.playerId]={id:randomUUID(),endsAt:Date.now()+300000};
+      system(r,name+'使用了地碎卡，'+r.players.find(player=>player.id===hit.playerId)!.name+' 的卡牌出现了裂痕（5 分钟）','item-card');
+      break;
+    }
+    case 'eclipse-book-card':
+      r.visualEffects??={};r.visualEffects.faceDown??={};
+      for(const entry of r.entries.filter(entry=>entry.status!=='left'&&entry.card))r.visualEffects.faceDown[entry.playerId]={id:randomUUID(),endsAt:Date.now()+60000};
+      system(r,name+'使用了日书卡，场上所有卡牌盖放 1 分钟','item-card');
+      break;
+    case 'convulsion-card':
+      for(const entry of r.entries.filter(entry=>entry.status!=='left')){
+        entry.itemCards??=[];
+        entry.itemCards.push({instanceId:randomUUID(),cardId:DISASTER_CARDS[randomInt(DISASTER_CARDS.length)]});
+      }
+      system(r,name+'使用了天变卡，场上每人获得一张随机灾难卡','item-card');
+      break;
     case 'test-card':system(r,name+'使用了测试卡','item-card');break;
   }
 }
@@ -374,7 +446,7 @@ export function view(r:RoomState,selfId:string,online:Set<string>,debugEnabled=f
       return {...p,name:(r.visualEffects?.clownNames?.[p.id]?.endsAt??0)>Date.now()?'🤡':p.name,online:online.has(p.id),waiting:r.phase!=='lobby'&&(!e||e.status==='left')&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,failedByGuess:e?.failedByGuess??false,
         ...(e?.card&&(reveal||(r.phase==='guessing'&&(!participant||p.id!==selfId||e.status==='solved')))?{card:e.card}:{})};
     }),
-    chat:r.chat,myItemCards:participant?(r.entries[index].itemCards??[]):[],visualEffects:r.visualEffects,reversalActive:participant&&r.turnPlayerId===selfId&&r.entries[index].reversalTurnId===r.turnId,finalCountdownRemainingTurns:r.finalCountdown?.remainingTurns,debugEnabled,
+    chat:r.chat.filter(message=>!message.recipientPlayerId||message.recipientPlayerId===selfId),myItemCards:participant?(r.entries[index].itemCards??[]):[],visualEffects:r.visualEffects,reversalActive:participant&&r.turnPlayerId===selfId&&r.entries[index].reversalTurnId===r.turnId,finalCountdownRemainingTurns:r.finalCountdown?.remainingTurns,debugEnabled,
     ...(r.phase==='setting'&&participant?{nextPlayerName:r.players.find(p=>p.id===next?.playerId)?.name,mySubmittedCard:r.entries[index].submitted?next?.card:undefined}:{}),
-    history:participant?r.history:[]};
+    history:participant?r.history.map(result=>({round:result.round,entries:result.entries.map(({itemCards,...entry})=>entry)})):[]};
 }
