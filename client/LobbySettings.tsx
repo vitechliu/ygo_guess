@@ -27,7 +27,7 @@ export function LobbySettings({room,host,send,connected}:{room:RoomView;host:boo
         </RadioGroup></div>
         <label>比赛局数<input aria-label="房间比赛局数" type="number" min={1} max={20} required value={draft.rounds} onChange={e=>setDraft(s=>({...s,rounds:e.target.value===''?0:Number(e.target.value)}))}/></label>
         <label>每局猜测机会<input aria-label="房间每局猜测机会" type="number" min={1} max={10} required value={draft.attempts} onChange={e=>setDraft(s=>({...s,attempts:e.target.value===''?0:Number(e.target.value)}))}/></label>
-        <label className="item-cards-setting"><span>开启道具卡</span><input aria-label="开启道具卡" type="checkbox" checked={draft.itemCards??true} onChange={e=>setDraft(s=>({...s,itemCards:e.target.checked}))}/><small>每局前 5 次个人回合各抽 1 张</small></label>
+        <label className="item-cards-setting"><span>开启道具卡</span><input aria-label="开启道具卡" type="checkbox" checked={draft.itemCards??true} onChange={e=>setDraft(s=>({...s,itemCards:e.target.checked}))}/><small>每局第 3、6、9……次轮到自己时各抽 1 张</small></label>
       </fieldset>
       <Button type="submit" variant="outline" disabled={!changed||!valid||saving||!connected}>{saving?'保存中…':'保存设置'}</Button>
     </form>:<div className="lobby-settings-summary"><span>{room.settings.mode==='custom'?'好友出题':'随机分配'}</span><span>{room.settings.rounds} 局</span><span>每局 {room.settings.attempts} 次猜测</span><span>道具卡{room.settings.itemCards===false?'关闭':'开启'}</span></div>}

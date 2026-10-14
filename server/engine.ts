@@ -151,7 +151,7 @@ function beginGuessing(r: RoomState) {
 }
 function activate(r: RoomState,e: Entry) {
   e.turns++; e.reversalTurnId=undefined; r.turnPlayerId=e.playerId; r.turnId=randomUUID();
-  if(r.settings.itemCards!==false&&e.turns<=5) {
+  if(r.settings.itemCards!==false&&e.turns%3===0) {
     e.itemCards??=[];
     e.itemCards.push({instanceId:randomUUID(),cardId:drawItemCard()});
   }

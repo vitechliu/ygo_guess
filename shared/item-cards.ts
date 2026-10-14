@@ -18,11 +18,11 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'maxx-c-card': {
     id: 'maxx-c-card', name: '增殖卡', category: 'monster', reference: '增殖的G',
-    image: '/maxx-c-item-card.webp', description: '可爱的小蟑螂爬上所有人的卡牌，持续 3 分钟。', timing: 'own-turn', weight: 20,
+    image: '/maxx-c-item-card.webp', description: '可爱的G爬上所有人的卡牌，持续 3 分钟。', timing: 'own-turn', weight: 20,
   },
   'mask-change-card': {
     id: 'mask-change-card', name: '假面卡', category: 'spell', reference: '假面变化',
-    image: '/mask-change-item-card.webp', description: '所有人的卡牌暂时变成不同的假面英雄，持续 1 分钟。猜卡答案不会改变。', timing: 'own-turn', weight: 50,
+    image: '/mask-change-item-card.webp', description: '所有人的卡牌暂时变化变成不同的假面英雄，持续 1 分钟。', timing: 'own-turn', weight: 50,
   },
   'chance-card': {
     id: 'chance-card', name: '机会卡', category: 'spell', reference: '第二次机会',
@@ -30,11 +30,11 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'lightning-card': {
     id: 'lightning-card', name: '雷击卡', category: 'spell', reference: '雷击',
-    image: '/lightning-item-card.webp', description: '雷电会随机落在页面上，持续 3 分钟。', timing: 'own-turn', weight: 50,
+    image: '/lightning-item-card.webp', description: '雷电会随机落下，持续 3 分钟。', timing: 'own-turn', weight: 50,
   },
   'fireball-card': {
     id: 'fireball-card', name: '火球卡', category: 'spell', reference: '火球',
-    image: '/fireball-item-card.webp', description: '指定一名其他玩家的卡牌，让其燃烧起来，持续 3 分钟。', timing: 'own-turn', weight: 150,
+    image: '/fireball-item-card.webp', description: '指定一名其他玩家的卡牌，燃烧吧！持续 3 分钟。', timing: 'own-turn', weight: 150,
   },
   'outer-entity-card': {
     id: 'outer-entity-card', name: '外神卡', category: 'xyz', reference: '外神 奈亚拉',
@@ -46,15 +46,15 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'crossout-card': {
     id: 'crossout-card', name: '指名卡', category: 'spell', reference: '抹杀的指名者',
-    image: '/crossout-item-card.webp', description: '宣布一个词或概念，这场游戏里大家提问时都不能提到它。', timing: 'own-turn', weight: 20,
+    image: '/crossout-item-card.webp', description: '宣布一个词或概念，这局游戏里大家提问时都不能提及。', timing: 'own-turn', weight: 20,
   },
   'scanner-card': {
     id: 'scanner-card', name: '扫描卡', category: 'spell', reference: '卡片扫描者',
-    image: '/scanner-item-card.webp', description: '数一数你的卡名有多少个字、数字和符号，让大家知道结果。', timing: 'own-turn', weight: 100,
+    image: '/scanner-item-card.webp', description: '得知你的卡牌有多少字。', timing: 'own-turn', weight: 100,
   },
   'moon-book-card': {
     id: 'moon-book-card', name: '月书卡', category: 'spell', reference: '月之书',
-    image: '/moon-book-item-card.webp', description: '指定一名其他玩家，把他的卡牌盖起来，持续 3 分钟。', timing: 'own-turn', weight: 100,
+    image: '/moon-book-item-card.webp', description: '指定一名其他玩家，把他的卡牌盖伏，持续 3 分钟。', timing: 'own-turn', weight: 100,
   },
   'reborn-card': {
     id: 'reborn-card', name: '苏生卡', category: 'spell', reference: '死者苏生',
@@ -66,11 +66,11 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'reversal-card': {
     id: 'reversal-card', name: '逆转卡', category: 'spell', reference: '大逆转谜题',
-    image: '/reversal-item-card.webp', description: '这回合你可以问 5 个问题，但猜错或跳过就会立刻失败。', timing: 'own-turn', weight: 30,
+    image: '/reversal-item-card.webp', description: '这回合你可以额外问 5 个问题，但猜错或跳过就会立刻失败。', timing: 'own-turn', weight: 30,
   },
   'puzzle-card': {
     id: 'puzzle-card', name: '谜题卡', category: 'spell', reference: '谜题',
-    image: '/puzzle-item-card.webp', description: '这回合你可以多问 1 个问题。', timing: 'own-turn', weight: 200,
+    image: '/puzzle-item-card.webp', description: '这回合你可以额外问 1 个问题。', timing: 'own-turn', weight: 200,
   },
   'hint-card': {
     id: 'hint-card', name: '提示卡', category: 'monster', reference: '杀手级调整曲·提示员',
@@ -82,7 +82,7 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'clown-card': {
     id: 'clown-card', name: '小丑卡', category: 'monster', reference: '娱乐法师 戏法小丑',
-    image: '/clown-item-card.webp', description: '指定一名其他玩家，让他的昵称变成🤡，持续 5 分钟。', timing: 'own-turn', weight: 50,
+    image: '/clown-item-card.webp', description: '指定一名其他玩家，让他的变成🤡，持续 5 分钟。', timing: 'own-turn', weight: 50,
   },
   'friendship-card': {
     id: 'friendship-card', name: '友情卡', category: 'spell', reference: '友情 YU-JYO',
@@ -94,7 +94,7 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'countdown-card': {
     id: 'countdown-card', name: '终焉卡', category: 'spell', reference: '终焉的倒计时',
-    image: '/countdown-item-card.webp', description: '从下一个玩家回合开始，经过 20 个玩家回合后，这一局将结束。', timing: 'own-turn', weight: 5,
+    image: '/countdown-item-card.webp', description: '从下一个玩家回合开始，经过 20 个玩家回合后，游戏强制结束。', timing: 'own-turn', weight: 5,
   },
   'snatch-card': {
     id: 'snatch-card', name: '抢夺卡', category: 'spell', reference: '强夺',

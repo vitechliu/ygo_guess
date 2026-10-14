@@ -5,8 +5,7 @@ const cmd=(body:any)=>({...body,id:randomUUID()}) as Command;
 async function started(h:Hub){await h.handle(session('a'),cmd({type:'create',settings:{mode:'random',rounds:2,attempts:3}}));const r=h.roomFor('a')!;await h.handle(session('b'),cmd({type:'join',code:r.code}));await h.handle(session('b'),cmd({type:'ready',ready:true}));await h.handle(session('a'),cmd({type:'start'}));return h.roomFor('a')!;}
 test('item use is persisted once and rejects forged or stale turns',async()=>{
  const h=await harness();try{
-  const r=await started(h.hub);const instance=r.entries[0].itemCards![0];const turn=r.turnId;
-  instance.cardId='test-card';
+  const r=await started(h.hub);const instance={instanceId:randomUUID(),cardId:'test-card' as const};r.entries[0].itemCards!.push(instance);const turn=r.turnId;
   assert.throws(()=>parseCommand({id:randomUUID(),type:'use-item-card',instanceId:'bad',turnId:turn}));
   await assert.rejects(h.hub.handle(session('b'),cmd({type:'use-item-card',instanceId:instance.instanceId,turnId:turn})),/轮到/);
   const use=cmd({type:'use-item-card',instanceId:instance.instanceId,turnId:turn});
@@ -21,7 +20,7 @@ test('item use is persisted once and rejects forged or stale turns',async()=>{
 });
 test('timed card effects survive storage and are removed by the room timer',async()=>{
  const h=await harness();try{
-  const r=await started(h.hub);const instance=r.entries[0].itemCards![0];instance.cardId='mask-change-card';
+  const r=await started(h.hub);const instance={instanceId:randomUUID(),cardId:'mask-change-card' as const};r.entries[0].itemCards!.push(instance);
   await h.hub.handle(session('a'),cmd({type:'use-item-card',instanceId:instance.instanceId,turnId:r.turnId}));
   const saved=(await h.store.loadRooms()).find(room=>room.code===r.code)!;
   assert.equal(Object.keys(saved.visualEffects.masks.appearances).length,2);

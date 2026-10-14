@@ -16,7 +16,7 @@ export function ItemHand({room,send,connected}:{room:RoomView;send:Send;connecte
   const anyOtherPlayer=room.players.filter(p=>p.id!==room.selfId&&!p.left&&!p.waiting);
   const anyCard=room.players.filter(p=>!p.left&&!p.waiting&&(p.card||p.id===room.selfId));
   return <section className="item-hand" aria-label="我的道具卡">
-    <div className="item-hand-heading"><h2>我的道具卡 <span>{room.myItemCards.length}</span></h2><p>每局前 5 次个人回合各抽 1 张 · 仅自己回合使用 · 使用后消耗</p></div>
+    <div className="item-hand-heading"><h2>我的道具卡 <span>{room.myItemCards.length}</span></h2><p>每局第 3、6、9……次轮到自己时各抽 1 张 · 仅自己回合使用 · 使用后消耗</p></div>
     {room.myItemCards.length?<div className="item-hand-list">{room.myItemCards.map(instance=>{
       const card=ITEM_CARDS[instance.cardId];
       if(!card)return null;

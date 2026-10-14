@@ -1,11 +1,18 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import * as E from '../server/engine.js';import {cards} from './fixtures.js';
 function room(n=3,mode:'custom'|'random'='custom',rounds=3,attempts=3){const r=E.createRoom('ABCDEF','p0','p0',{mode,rounds,attempts});for(let i=1;i<n;i++)E.join(r,'p'+i,'p'+i);r.players.forEach(p=>p.ready=true);return r;}
-function setup(r:ReturnType<typeof room>){E.startRound(r,[],true);for(let i=0;i<r.entries.length;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);}
-test('item cards are private, limited to five personal turns and consumed only on own turn',()=>{
- const r=room(2);setup(r);
- const first=r.entries[0].itemCards![0];
- first.cardId='test-card';
+function setup(r:ReturnType<typeof room>,withTestCards=true){E.startRound(r,[],true);for(let i=0;i<r.entries.length;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);if(withTestCards&&r.settings.itemCards!==false)for(const e of r.entries)e.itemCards!.push({instanceId:'test-'+e.playerId,cardId:'test-card'});}
+test('item cards arrive on every third personal turn and can only be consumed on own turn',()=>{
+ const r=room(2);setup(r,false);
+ assert.equal(r.entries[0].turns,1);
+ assert(r.entries.every(e=>e.itemCards?.length===0));
+ for(let i=0;i<3;i++)E.skip(r,r.turnPlayerId!,r.turnId);
+ assert.equal(r.entries[0].turns,2);
+ assert.equal(r.entries[1].turns,2);
+ assert(r.entries.every(e=>e.itemCards?.length===0));
+ E.skip(r,r.turnPlayerId!,r.turnId);
+ assert.equal(r.entries[0].turns,3);
+ const first=r.entries[0].itemCards![0];first.cardId='test-card';
  assert.equal(first.cardId,'test-card');
  assert.deepEqual(E.view(r,'p0',new Set()).myItemCards,[first]);
  assert.deepEqual(E.view(r,'p1',new Set()).myItemCards,[]);
@@ -17,9 +24,10 @@ test('item cards are private, limited to five personal turns and consumed only o
  assert.equal(r.entries[0].itemCards!.length,0);
  assert.throws(()=>E.useItemCard(r,'p0',first.instanceId,r.turnId),/手牌/);
  for(let i=0;i<12;i++)E.skip(r,r.turnPlayerId!,r.turnId);
- assert.equal(r.entries[0].turns,7);
- assert.equal(r.entries[0].itemCards!.length,4);
- assert.equal(r.entries[1].itemCards!.length,5);
+ assert.equal(r.entries[0].turns,9);
+ assert.equal(r.entries[0].itemCards!.length,2);
+ assert.equal(r.entries[1].turns,8);
+ assert.equal(r.entries[1].itemCards!.length,2);
  E.finishRound(r);
  assert(r.entries.every(e=>e.itemCards?.length===0));
 });
