@@ -22,3 +22,8 @@
 | 谜题卡 | [谜题](https://ygocdb.com/card/38723936) | 待上线 | 公告本回合可额外问 1 个问题。 | 权重 200；ID：`puzzle-card`；仅口头遵守，不自动计数。 |
 | 提示卡 | [杀手级调整曲·提示员](https://ygocdb.com/card/16387555) | 待上线 | 指定一名其他在线玩家，请他给自己一个提示。 | 权重 70；ID：`hint-card`；只发系统消息，不输入或验证提示。 |
 | 丝袜卡 | [效果遮蒙者](https://ygocdb.com/card/97268402) | 待上线 | 公告请场上玩家回答“场上有多少对丝袜？” | 权重 30；ID：`stockings-card`；卡图聚焦来源角色的黑色丝袜部分；仅口头遵守。 |
+| 小丑卡 | [娱乐法师 戏法小丑](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=11802&ope=2) | 待上线 | 指定一名其他玩家，将其显示昵称临时改为 🤡，持续 5 分钟。 | 权重 50；ID：`clown-card`；保留原始身份和昵称，重复使用同一目标刷新时间；本小局结算时恢复。 |
+| 友情卡 | [友情 YU-JYO](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=5754&ope=2) | 待上线 | 指定一名仍在猜卡的其他玩家，你和他的剩余猜测次数各加 1。 | 权重 70；ID：`friendship-card`；已猜中或已出局玩家不能作为目标。 |
+| 团结卡 | 团结 UNITY | 待上线 | 所有仍在猜卡的玩家剩余猜测次数各加 1。 | 权重 20；ID：`unity-card`；不会让已出局玩家恢复参赛。 |
+| 终焉卡 | [终焉的倒计时](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=5788&ope=2&request_locale=ja) | 待上线 | 从使用者当前回合之后开始，完成 20 个玩家回合时强制结束当前小局。 | 权重 5；ID：`countdown-card`；每个实际轮到并结束的玩家回合算 1 次，被禁止卡跳过的回合不计；倒计时已生效时不能再使用另一张。 |
+| 抢夺卡 | [强夺](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=4898&ope=2&request_locale=ja) | 待上线 | 夺走一名其他仍在猜卡玩家除保底 1 次外的全部剩余猜测次数，并加到自己的剩余次数中。 | 权重 20；ID：`snatch-card`；目标须至少剩余 2 次；设计者：绫奈崎。 |

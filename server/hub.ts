@@ -127,7 +127,7 @@ export class Hub {
           case 'kick':host();E.requireGame(c.playerId!==session.playerId,'房主不能移除自己');E.leave(r,c.playerId,this.online(),'房主');break;
           case 'leave':E.leave(r,session.playerId,this.online());break;
           case 'again':host();E.again(r);r.createdAt=Date.now();break;
-          case 'chat':r.chat.push({id:c.id,name:session.name,text:c.text,time:Date.now()});r.chat=r.chat.slice(-100);break;
+          case 'chat':r.chat.push({id:c.id,playerId:session.playerId,name:r.players.find(p=>p.id===session.playerId)?.name??session.name,text:c.text,time:Date.now()});r.chat=r.chat.slice(-100);break;
           case 'admin-skip':E.skip(r,session.playerId,c.turnId,true);break;
           case 'admin-kick':E.leave(r,c.playerId,this.online(),'管理员');break;
           case 'admin-transfer':E.requireGame(E.members(r).some(p=>p.id===c.playerId)&&this.online().has(c.playerId),'请选择在线的房间成员');r.hostId=c.playerId;E.system(r,'管理员已转移房主');break;
@@ -158,7 +158,7 @@ export class Hub {
   }
   private async expireVisualEffects(){
     for(const old of this.rooms.values()){
-      if(!old.visualEffects?.roaches&&!old.visualEffects?.masks&&!old.visualEffects?.lightning&&!old.visualEffects?.distortion&&!old.visualEffects?.fireballs&&!old.visualEffects?.faceDown)continue;
+      if(!old.visualEffects?.roaches&&!old.visualEffects?.masks&&!old.visualEffects?.lightning&&!old.visualEffects?.distortion&&!old.visualEffects?.fireballs&&!old.visualEffects?.faceDown&&!old.visualEffects?.clownNames)continue;
       const r=structuredClone(old);
       if(!E.expireVisualEffects(r))continue;
       r.version++;

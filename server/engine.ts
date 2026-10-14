@@ -28,6 +28,10 @@ export function expireVisualEffects(r:RoomState,now=Date.now()) {
     for(const [playerId,effect] of Object.entries(r.visualEffects.faceDown))if(effect.endsAt<=now){delete r.visualEffects.faceDown[playerId];changed=true;}
     if(!Object.keys(r.visualEffects.faceDown).length)delete r.visualEffects.faceDown;
   }
+  if(r.visualEffects.clownNames){
+    for(const [playerId,effect] of Object.entries(r.visualEffects.clownNames))if(effect.endsAt<=now){delete r.visualEffects.clownNames[playerId];changed=true;}
+    if(!Object.keys(r.visualEffects.clownNames).length)delete r.visualEffects.clownNames;
+  }
   return changed;
 }
 export function system(r: RoomState, text: string, kind?: Chat['kind']) { r.chat.push({id:randomUUID(),name:'房间消息',text,time:Date.now(),system:true,...(kind?{kind}:{})}); r.chat=r.chat.slice(-100); }
@@ -71,7 +75,7 @@ export function startRound(r: RoomState, pool: Card[] = [], first = false) {
     requireGame(ps.every(p=>p.id===r.hostId||p.ready),'等待所有非房主玩家准备');
   } else requireGame(r.phase==='round-end','当前不能进入下一局');
   if(r.settings.mode==='random') requireGame(new Set(pool.map(c=>c.cid)).size>=ps.length,'精选题库未配置或有效卡牌不足，请配置题库或使用出题模式');
-  r.round++; r.setupId=randomUUID(); r.turnPlayerId=null; r.turnId='';r.visualEffects={};
+  r.round++; r.setupId=randomUUID(); r.turnPlayerId=null; r.turnId='';r.visualEffects={};r.finalCountdown=undefined;
   r.entries=ps.map(p=>({playerId:p.id,submitted:false,status:'playing',attempts:r.settings.attempts,turns:0,points:0,itemCards:[]}));
   if(r.settings.mode==='random') {
     const candidates=[...new Map(pool.map(c=>[c.cid,c])).values()];
@@ -115,12 +119,15 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
   const card=ITEM_CARDS[instance.cardId];
   requireGame(card&&card.timing==='own-turn','道具卡无法在此时使用');
   const target=targetPlayerId?r.entries.find(entry=>entry.playerId===targetPlayerId):undefined;
-  if(card.id==='prohibition-card')requireGame(target&&target.playerId!==id&&target.status==='playing'&&members(r).some(p=>p.id===targetPlayerId),'请选择仍在本局参赛的其他玩家');
+  if(card.id==='prohibition-card'||card.id==='friendship-card')requireGame(target&&target.playerId!==id&&target.status==='playing'&&members(r).some(p=>p.id===targetPlayerId),'请选择仍在本局猜卡的其他玩家');
+  else if(card.id==='snatch-card')requireGame(target&&target.playerId!==id&&target.status==='playing'&&target.attempts>=2&&members(r).some(p=>p.id===targetPlayerId),'请选择至少还有 2 次猜测机会的其他玩家');
+  else if(card.id==='clown-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&members(r).some(p=>p.id===targetPlayerId),'请选择本局的其他玩家');
   else if(card.id==='fireball-card'||card.id==='god-rage-card'||card.id==='moon-book-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&target.card&&members(r).some(p=>p.id===targetPlayerId),'请选择场上有卡牌的其他玩家');
   else if(card.id==='reborn-card')requireGame(target&&target.playerId!==id&&target.status==='failed'&&target.failedByGuess&&target.attempts===0&&members(r).some(p=>p.id===targetPlayerId)&&online.has(targetPlayerId!),'请选择在线且因猜测次数用完而失败的其他玩家');
   else if(card.id==='hint-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&members(r).some(p=>p.id===targetPlayerId)&&online.has(targetPlayerId!),'请选择在线的其他玩家');
   else requireGame(!targetPlayerId,'这张道具卡不需要指定玩家');
   if(card.id==='scanner-card')requireGame(e.card,'本局卡牌尚未设置');
+  if(card.id==='countdown-card')requireGame(!r.finalCountdown,'终焉倒计时已经开始');
   e.itemCards!.splice(index,1);
   const name=r.players.find(p=>p.id===id)!.name;
   switch(card.id){
@@ -201,6 +208,32 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
     case 'stockings-card':
       system(r,name+'使用了丝袜卡：请场上玩家回答，场上有多少对丝袜？','item-card');
       break;
+    case 'clown-card':
+      r.visualEffects??={};
+      r.visualEffects.clownNames??={};
+      r.visualEffects.clownNames[target!.playerId]={id:randomUUID(),endsAt:Date.now()+300000};
+      system(r,name+'对 '+r.players.find(p=>p.id===targetPlayerId)!.name+' 使用了小丑卡，昵称变成🤡（5 分钟）','item-card');
+      break;
+    case 'friendship-card':
+      e.attempts++;target!.attempts++;
+      system(r,name+'对 '+r.players.find(p=>p.id===targetPlayerId)!.name+' 使用了友情卡，两人猜测机会各增加 1 次','item-card');
+      break;
+    case 'unity-card': {
+      const boosted=r.entries.filter(entry=>entry.status==='playing');
+      for(const entry of boosted)entry.attempts++;
+      system(r,name+'使用了团结卡，仍在猜卡的 '+boosted.length+' 名玩家各增加 1 次猜测机会','item-card');
+      break;
+    }
+    case 'countdown-card':
+      r.finalCountdown={remainingTurns:20,activatedTurnId:r.turnId};
+      system(r,name+'使用了终焉卡：从下一个玩家回合开始，20 个玩家回合后本局结束','item-card');
+      break;
+    case 'snatch-card': {
+      const stolen=target!.attempts-1;
+      target!.attempts=1;e.attempts+=stolen;
+      system(r,name+'对 '+r.players.find(p=>p.id===targetPlayerId)!.name+' 使用了抢夺卡，夺走了 '+stolen+' 次猜测机会','item-card');
+      break;
+    }
     case 'test-card':system(r,name+'使用了测试卡','item-card');break;
   }
 }
@@ -236,6 +269,10 @@ export function skip(r:RoomState,id:string,turnId:string,force=false) {
   advance(r);
 }
 function advance(r:RoomState) {
+  if(r.finalCountdown&&r.turnId!==r.finalCountdown.activatedTurnId){
+    r.finalCountdown.remainingTurns--;
+    if(r.finalCountdown.remainingTurns===0){system(r,'终焉卡倒计时结束，本局立即结束','item-card');finishRound(r);return;}
+  }
   const current=r.entries.findIndex(e=>e.playerId===r.turnPlayerId);
   const pendingSkips=r.entries.reduce((count,e)=>count+(e.status==='playing'?(e.skipNextTurns??0):0),0);
   for(let step=1;step<=r.entries.length+pendingSkips;step++) {
@@ -249,6 +286,7 @@ function advance(r:RoomState) {
 export function finishRound(r:RoomState,early=false) {
   for(const e of r.entries){e.itemCards=[];e.skipNextTurns=0;}
   r.visualEffects={};
+  r.finalCountdown=undefined;
   if(r.round>0&&!r.history.some(h=>h.round===r.round)) {
     for(const e of r.entries) if(e.status==='playing')e.status='failed';
     r.history.push({round:r.round,entries:structuredClone(r.entries)});
@@ -279,7 +317,7 @@ export function leave(r:RoomState,id:string,online:Set<string>,removedBy?:'房�
 export function again(r:RoomState) {
   requireGame(r.phase==='match-end','比赛尚未结束');
   r.players=members(r).map((p,i)=>({...p,score:0,ready:false,seat:i}));
-  r.round=0;r.entries=[];r.history=[];r.phase='lobby';r.turnId='';r.setupId='';r.turnPlayerId=null;r.visualEffects={};
+  r.round=0;r.entries=[];r.history=[];r.phase='lobby';r.turnId='';r.setupId='';r.turnPlayerId=null;r.visualEffects={};r.finalCountdown=undefined;
   system(r,'新比赛已创建，请准备');
 }
 export function view(r:RoomState,selfId:string,online:Set<string>):RoomView {
@@ -290,10 +328,10 @@ export function view(r:RoomState,selfId:string,online:Set<string>):RoomView {
   return {code:r.code,hostId:r.hostId,settings:r.settings,phase:r.phase,round:r.round,turnPlayerId:r.turnPlayerId,turnId:r.turnId,setupId:r.setupId,version:r.version,selfId,
     players:r.players.map(p=>{
       const e=r.entries.find(e=>e.playerId===p.id);
-      return {...p,online:online.has(p.id),waiting:r.phase!=='lobby'&&(!e||e.status==='left')&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,failedByGuess:e?.failedByGuess??false,
+      return {...p,name:(r.visualEffects?.clownNames?.[p.id]?.endsAt??0)>Date.now()?'🤡':p.name,online:online.has(p.id),waiting:r.phase!=='lobby'&&(!e||e.status==='left')&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,failedByGuess:e?.failedByGuess??false,
         ...(e?.card&&(reveal||(r.phase==='guessing'&&(!participant||p.id!==selfId||e.status==='solved')))?{card:e.card}:{})};
     }),
-    chat:r.chat,myItemCards:participant?(r.entries[index].itemCards??[]):[],visualEffects:r.visualEffects,reversalActive:participant&&r.turnPlayerId===selfId&&r.entries[index].reversalTurnId===r.turnId,
+    chat:r.chat,myItemCards:participant?(r.entries[index].itemCards??[]):[],visualEffects:r.visualEffects,reversalActive:participant&&r.turnPlayerId===selfId&&r.entries[index].reversalTurnId===r.turnId,finalCountdownRemainingTurns:r.finalCountdown?.remainingTurns,
     ...(r.phase==='setting'&&participant?{nextPlayerName:r.players.find(p=>p.id===next?.playerId)?.name,mySubmittedCard:r.entries[index].submitted?next?.card:undefined}:{}),
     history:participant?r.history:[]};
 }

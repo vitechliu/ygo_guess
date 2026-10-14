@@ -58,7 +58,17 @@ test('item card weights select only enabled cards at their exact boundaries',()=
  assert.equal(E.drawItemCard(1169),'hint-card');
  assert.equal(E.drawItemCard(1170),'stockings-card');
  assert.equal(E.drawItemCard(1199),'stockings-card');
- assert.throws(()=>E.drawItemCard(1200),/抽取/);
+ assert.equal(E.drawItemCard(1200),'clown-card');
+ assert.equal(E.drawItemCard(1249),'clown-card');
+ assert.equal(E.drawItemCard(1250),'friendship-card');
+ assert.equal(E.drawItemCard(1319),'friendship-card');
+ assert.equal(E.drawItemCard(1320),'unity-card');
+ assert.equal(E.drawItemCard(1339),'unity-card');
+ assert.equal(E.drawItemCard(1340),'countdown-card');
+ assert.equal(E.drawItemCard(1344),'countdown-card');
+ assert.equal(E.drawItemCard(1345),'snatch-card');
+ assert.equal(E.drawItemCard(1364),'snatch-card');
+ assert.throws(()=>E.drawItemCard(1365),/抽取/);
 });
 test('book of moon covers only the selected card for three minutes and expires cleanly',()=>{
  const r=room(3);setup(r);

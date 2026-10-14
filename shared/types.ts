@@ -11,7 +11,7 @@ export interface VisualEffects { roaches?: TimedVisualEffect; masks?: MaskVisual
 export interface FinalCountdown { remainingTurns: number; activatedTurnId: string }
 export interface Player { id: string; name: string; seat: number; score: number; ready: boolean; left: boolean }
 export interface Entry { playerId: string; card?: Card; submitted: boolean; status: 'playing' | 'solved' | 'failed' | 'left'; attempts: number; turns: number; points: number; itemCards?: ItemCardInstance[]; skipNextTurns?: number; failedByGuess?: boolean; reversalTurnId?: string }
-export interface Chat { id: string; name: string; text: string; time: number; system?: boolean; kind?: 'guess-correct' | 'guess-wrong' | 'item-card' }
+export interface Chat { id: string; name: string; playerId?: string; text: string; time: number; system?: boolean; kind?: 'guess-correct' | 'guess-wrong' | 'item-card' }
 export interface RoundResult { round: number; entries: Entry[] }
 export interface RoomState { code: string; hostId: string; settings: Settings; phase: Phase; round: number; players: Player[]; entries: Entry[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; history: RoundResult[]; processed: { key: string; at: number }[]; createdAt: number; visualEffects?: VisualEffects; finalCountdown?: FinalCountdown }
 export interface PlayerView extends Player { online: boolean; waiting: boolean; status?: Entry['status']; attempts: number; turns: number; points: number; card?: Card; submitted: boolean; failedByGuess?: boolean }
