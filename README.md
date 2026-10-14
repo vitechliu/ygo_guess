@@ -10,10 +10,12 @@ React / TypeScript / Vite 前端，Node.js / ws 服务端。本地使用文件�
 
 ## 本地启动
 
-需要 Node.js 24 或更高版本：
+需要 Node.js 24。项目提供 `.nvmrc`；先安装并切换到 24，再用 `npm ci` 按锁文件安装依赖，避免安装时改动 `package-lock.json`。Node 25 会被 `.npmrc` 中的 `engine-strict` 拒绝：
 
 ```powershell
-npm install
+nvm install 24
+nvm use 24
+npm ci
 Copy-Item .env.example .env
 npm run dev
 ```

@@ -10,7 +10,10 @@ export function normalize(raw:Raw):Card {
   // Search/cardset use cn_name; the single-card endpoint puts the YGOPro name in text.name.
   const name=[raw.cn_name,text.cn_name,text.name,raw.name,raw.sc_name,text.sc_name,raw.md_name,text.md_name,raw.jp_name,text.jp_name]
     .find(value=>typeof value==='string'&&value.trim())?.trim()??String(raw.id);
-  return {id:raw.id,cid:raw.cid,name,types:text.types??'',description:[text.pdesc,text.desc].filter(Boolean).join('\n'),image:'https://cdn.233.momobako.com/ygopro/pics/'+raw.id+'.jpg!half'};
+  const image=raw.id>100000000
+    ? 'https://cdntx.moecube.com/ygopro-super-pre/data/pics/'+raw.id+'.jpg'
+    : 'https://cdn.233.momobako.com/ygopro/pics/'+raw.id+'.jpg!half';
+  return {id:raw.id,cid:raw.cid,name,types:text.types??'',description:[text.pdesc,text.desc].filter(Boolean).join('\n'),image};
 }
 export class Cards implements CardProvider {
   private pending=new Map<string,Promise<any>>();
