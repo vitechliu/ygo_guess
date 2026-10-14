@@ -1,20 +1,21 @@
 export interface Card { id: number; cid: number; name: string; types: string; description: string; image: string }
 export type Phase = 'lobby' | 'setting' | 'guessing' | 'round-end' | 'match-end' | 'closed';
 export interface Settings { mode: 'custom' | 'random'; rounds: number; attempts: number; itemCards?: boolean }
-export type ItemCardId = 'test-card' | 'prohibition-card' | 'maxx-c-card' | 'mask-change-card';
-export interface ItemCard { id: ItemCardId; name: string; category: 'spell' | 'trap' | 'monster'; reference: string; image: string; description: string; timing: 'own-turn'; weight: number }
+export type ItemCardId = 'test-card' | 'prohibition-card' | 'maxx-c-card' | 'mask-change-card' | 'chance-card' | 'lightning-card' | 'fireball-card' | 'outer-entity-card' | 'god-rage-card' | 'crossout-card' | 'scanner-card' | 'moon-book-card' | 'reborn-card' | 'void-card' | 'reversal-card' | 'puzzle-card' | 'hint-card' | 'stockings-card' | 'clown-card' | 'friendship-card' | 'unity-card' | 'countdown-card' | 'snatch-card';
+export interface ItemCard { id: ItemCardId; name: string; category: 'spell' | 'trap' | 'monster' | 'xyz'; reference: string; image: string; description: string; timing: 'own-turn'; weight: number }
 export interface ItemCardInstance { instanceId: string; cardId: ItemCardId }
 export interface MaskAppearance { id: number; name: string; image: string }
 export interface TimedVisualEffect { id: string; endsAt: number }
 export interface MaskVisualEffect extends TimedVisualEffect { appearances: Record<string,MaskAppearance> }
-export interface VisualEffects { roaches?: TimedVisualEffect; masks?: MaskVisualEffect }
+export interface VisualEffects { roaches?: TimedVisualEffect; masks?: MaskVisualEffect; lightning?: TimedVisualEffect; fireballs?: Record<string,TimedVisualEffect>; distortion?: TimedVisualEffect; obscuredPlayerIds?: string[]; faceDown?: Record<string,TimedVisualEffect>; clownNames?: Record<string,TimedVisualEffect> }
+export interface FinalCountdown { remainingTurns: number; activatedTurnId: string }
 export interface Player { id: string; name: string; seat: number; score: number; ready: boolean; left: boolean }
-export interface Entry { playerId: string; card?: Card; submitted: boolean; status: 'playing' | 'solved' | 'failed' | 'left'; attempts: number; turns: number; points: number; itemCards?: ItemCardInstance[]; skipNextTurns?: number }
+export interface Entry { playerId: string; card?: Card; submitted: boolean; status: 'playing' | 'solved' | 'failed' | 'left'; attempts: number; turns: number; points: number; itemCards?: ItemCardInstance[]; skipNextTurns?: number; failedByGuess?: boolean; reversalTurnId?: string }
 export interface Chat { id: string; name: string; text: string; time: number; system?: boolean; kind?: 'guess-correct' | 'guess-wrong' | 'item-card' }
 export interface RoundResult { round: number; entries: Entry[] }
-export interface RoomState { code: string; hostId: string; settings: Settings; phase: Phase; round: number; players: Player[]; entries: Entry[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; history: RoundResult[]; processed: { key: string; at: number }[]; createdAt: number; visualEffects?: VisualEffects }
-export interface PlayerView extends Player { online: boolean; waiting: boolean; status?: Entry['status']; attempts: number; turns: number; points: number; card?: Card; submitted: boolean }
-export interface RoomView { code: string; hostId: string; settings: Settings; phase: Phase; round: number; players: PlayerView[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; selfId: string; nextPlayerName?: string; mySubmittedCard?: Card; myItemCards: ItemCardInstance[]; history: RoundResult[]; visualEffects?: VisualEffects }
+export interface RoomState { code: string; hostId: string; settings: Settings; phase: Phase; round: number; players: Player[]; entries: Entry[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; history: RoundResult[]; processed: { key: string; at: number }[]; createdAt: number; visualEffects?: VisualEffects; finalCountdown?: FinalCountdown }
+export interface PlayerView extends Player { online: boolean; waiting: boolean; status?: Entry['status']; attempts: number; turns: number; points: number; card?: Card; submitted: boolean; failedByGuess?: boolean }
+export interface RoomView { code: string; hostId: string; settings: Settings; phase: Phase; round: number; players: PlayerView[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; selfId: string; nextPlayerName?: string; mySubmittedCard?: Card; myItemCards: ItemCardInstance[]; history: RoundResult[]; visualEffects?: VisualEffects; reversalActive?: boolean; finalCountdownRemainingTurns?: number }
 export interface AdminRoom { code: string; phase: Phase; round: number; hostId: string; turnId: string; turnPlayerId: string | null; players: { id: string; name: string; online: boolean }[] }
 export interface Session { playerId: string; name: string; admin: boolean; expiresAt: number }
 export type Command =

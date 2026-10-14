@@ -121,7 +121,7 @@ export class Hub {
           case 'next':host();E.startRound(r,pool);break;
           case 'set-card':E.submitCard(r,session.playerId,card!,c.setupId);break;
           case 'guess':E.guess(r,session.playerId,card!,c.turnId);break;
-          case 'use-item-card':E.useItemCard(r,session.playerId,c.instanceId,c.turnId,c.targetPlayerId);break;
+          case 'use-item-card':E.useItemCard(r,session.playerId,c.instanceId,c.turnId,c.targetPlayerId,this.online());break;
           case 'give-up':E.giveUp(r,session.playerId,c.turnId);break;
           case 'skip':E.skip(r,session.playerId,c.turnId,r.hostId===session.playerId||session.admin);break;
           case 'kick':host();E.requireGame(c.playerId!==session.playerId,'房主不能移除自己');E.leave(r,c.playerId,this.online(),'房主');break;
@@ -158,7 +158,7 @@ export class Hub {
   }
   private async expireVisualEffects(){
     for(const old of this.rooms.values()){
-      if(!old.visualEffects?.roaches&&!old.visualEffects?.masks)continue;
+      if(!old.visualEffects?.roaches&&!old.visualEffects?.masks&&!old.visualEffects?.lightning&&!old.visualEffects?.distortion&&!old.visualEffects?.fireballs&&!old.visualEffects?.faceDown)continue;
       const r=structuredClone(old);
       if(!E.expireVisualEffects(r))continue;
       r.version++;
