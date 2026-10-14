@@ -1,5 +1,5 @@
 import { randomUUID, randomInt } from 'node:crypto';
-import type { Card, RoomState, RoomView, Settings, Entry, ItemCardId, Chat } from '../shared/types.js';
+import type { Card, RoomState, RoomView, Settings, Entry, ItemCardId, Chat, Command } from '../shared/types.js';
 import { ITEM_CARDS } from '../shared/item-cards.js';
 import { MASKED_HEROES } from '../shared/masked-heroes.js';
 
@@ -8,10 +8,53 @@ export function requireGame(value: unknown, message: string): asserts value { if
 export const members = (r: RoomState) => r.players.filter(p => !p.left).sort((a,b) => a.seat-b.seat);
 const drawable=Object.values(ITEM_CARDS).filter(card=>card.weight>0);
 const totalWeight=drawable.reduce((sum,card)=>sum+card.weight,0);
+const DEBUG_CARDS:Card[]=[
+  {id:900000001,cid:900000001,name:'调试小龙',types:'调试卡',description:'本地道具卡测试用。',image:'/test-item-card.webp'},
+  {id:900000002,cid:900000002,name:'调试魔法使',types:'调试卡',description:'本地道具卡测试用。',image:'/prohibition-item-card.webp'},
+];
 export function drawItemCard(roll=randomInt(totalWeight)):ItemCardId {
   requireGame(Number.isInteger(roll)&&roll>=0&&roll<totalWeight,'道具卡抽取数值无效');
   for(const card of drawable){if(roll<card.weight)return card.id;roll-=card.weight;}
   throw new GameError('道具卡池未配置');
+}
+export function debugAction(r:RoomState,command:Extract<Command,{type:'debug'}>) {
+  if(command.action==='start-solo'){
+    requireGame(r.phase==='lobby'&&members(r).length===1,'单人测试只能在只有房主的等待房间开始');
+    join(r,'debug-bot:'+r.code,'测试玩家');
+    r.settings={...r.settings,mode:'random',itemCards:true};
+    r.players.forEach(player=>player.ready=true);
+    startRound(r,DEBUG_CARDS,true);
+    return;
+  }
+  requireGame(r.phase==='guessing','请先进入猜卡阶段');
+  if(command.action==='expire-effects'){r.visualEffects={};return;}
+  if(command.action==='countdown-to-one'){
+    requireGame(r.finalCountdown,'终焉倒计时尚未开始');
+    r.finalCountdown.remainingTurns=1;
+    return;
+  }
+  requireGame('playerId' in command,'请选择调试玩家');
+  const e=r.entries.find(entry=>entry.playerId===command.playerId);
+  requireGame(e&&e.status!=='left'&&members(r).some(player=>player.id===command.playerId),'请选择本局参赛的玩家');
+  if(command.action==='grant-card'){
+    requireGame(ITEM_CARDS[command.cardId],'道具卡不存在');
+    if(command.makeTurn)requireGame(e.status==='playing'&&e.attempts>0,'只能切换到仍在猜卡的玩家');
+    e.itemCards??=[];
+    e.itemCards.push({instanceId:randomUUID(),cardId:command.cardId});
+    if(command.makeTurn){
+      r.turnPlayerId=e.playerId;r.turnId=randomUUID();e.turns=Math.max(1,e.turns);e.reversalTurnId=undefined;
+    }
+  }else if(command.action==='clear-hand')e.itemCards=[];
+  else if(command.action==='set-turn'){
+    requireGame(e.status==='playing'&&e.attempts>0,'只能切换到仍在猜卡的玩家');
+    r.turnPlayerId=e.playerId;r.turnId=randomUUID();e.turns=Math.max(1,e.turns);e.reversalTurnId=undefined;
+  }else if(command.action==='fail-by-guess'){
+    requireGame(e.status==='playing'&&e.playerId!==r.turnPlayerId,'不能将当前回合玩家设为出局');
+    e.status='failed';e.attempts=0;e.failedByGuess=true;e.points=0;
+  }else if(command.action==='set-attempts'){
+    requireGame(e.status==='playing'||e.status==='failed','只能调整仍在猜卡或已出局的玩家');
+    e.status='playing';e.attempts=command.attempts;e.failedByGuess=false;
+  }
 }
 export function expireVisualEffects(r:RoomState,now=Date.now()) {
   if(!r.visualEffects)return false;
@@ -320,7 +363,7 @@ export function again(r:RoomState) {
   r.round=0;r.entries=[];r.history=[];r.phase='lobby';r.turnId='';r.setupId='';r.turnPlayerId=null;r.visualEffects={};r.finalCountdown=undefined;
   system(r,'新比赛已创建，请准备');
 }
-export function view(r:RoomState,selfId:string,online:Set<string>):RoomView {
+export function view(r:RoomState,selfId:string,online:Set<string>,debugEnabled=false):RoomView {
   const index=r.entries.findIndex(e=>e.playerId===selfId);
   const participant=index>=0&&r.entries[index].status!=='left'&&!r.players.find(p=>p.id===selfId)?.left;
   const reveal=r.phase==='round-end'||r.phase==='match-end';
@@ -331,7 +374,7 @@ export function view(r:RoomState,selfId:string,online:Set<string>):RoomView {
       return {...p,name:(r.visualEffects?.clownNames?.[p.id]?.endsAt??0)>Date.now()?'🤡':p.name,online:online.has(p.id),waiting:r.phase!=='lobby'&&(!e||e.status==='left')&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,failedByGuess:e?.failedByGuess??false,
         ...(e?.card&&(reveal||(r.phase==='guessing'&&(!participant||p.id!==selfId||e.status==='solved')))?{card:e.card}:{})};
     }),
-    chat:r.chat,myItemCards:participant?(r.entries[index].itemCards??[]):[],visualEffects:r.visualEffects,reversalActive:participant&&r.turnPlayerId===selfId&&r.entries[index].reversalTurnId===r.turnId,finalCountdownRemainingTurns:r.finalCountdown?.remainingTurns,
+    chat:r.chat,myItemCards:participant?(r.entries[index].itemCards??[]):[],visualEffects:r.visualEffects,reversalActive:participant&&r.turnPlayerId===selfId&&r.entries[index].reversalTurnId===r.turnId,finalCountdownRemainingTurns:r.finalCountdown?.remainingTurns,debugEnabled,
     ...(r.phase==='setting'&&participant?{nextPlayerName:r.players.find(p=>p.id===next?.playerId)?.name,mySubmittedCard:r.entries[index].submitted?next?.card:undefined}:{}),
     history:participant?r.history:[]};
 }

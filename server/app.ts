@@ -12,7 +12,7 @@ import { GameError } from './engine.js';
 
 export interface AppOptions { store:Store; cards:CardProvider; dev?:boolean; adminKey?:string; secureCookie?:boolean; hostGraceMs?:number }
 export async function createApp(options:AppOptions){
-  const app=express(),server=createServer(app),hub=new Hub(options.store,options.cards,options.hostGraceMs);
+  const app=express(),server=createServer(app),hub=new Hub(options.store,options.cards,options.hostGraceMs,Boolean(options.dev)&&process.env.NODE_ENV!=='production');
   await hub.init();
   const wss=new WebSocketServer({noServer:true,maxPayload:8192,perMessageDeflate:false});
   const secure=options.secureCookie??process.env.COOKIE_SECURE==='1';

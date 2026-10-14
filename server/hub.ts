@@ -4,11 +4,13 @@ import { z } from 'zod';
 import type { Command, Session, RoomState, ServerMessage, AdminRoom, Card } from '../shared/types.js';
 import type { Store, Audit } from './store.js';
 import type { CardProvider } from './cards.js';
+import { ITEM_CARDS } from '../shared/item-cards.js';
 import * as E from './engine.js';
 
 const base={id:z.string().min(1).max(80)};
 const code=z.string().regex(/^[A-Z2-9]{6}$/), playerId=z.string().max(64), turnId=z.string().uuid();
 const settings=z.object({mode:z.enum(['custom','random']),rounds:z.number().int().min(1).max(20),attempts:z.number().int().min(1).max(10),itemCards:z.boolean().default(true)});
+const debugCardId=z.custom<keyof typeof ITEM_CARDS>(value=>typeof value==='string'&&Object.hasOwn(ITEM_CARDS,value));
 const schemas=[
   z.object({...base,type:z.literal('create'),settings}),
   z.object({...base,type:z.literal('update-settings'),settings}),
@@ -22,6 +24,10 @@ const schemas=[
   z.object({...base,type:z.literal('skip'),turnId}),
   z.object({...base,type:z.literal('kick'),playerId}),
   z.object({...base,type:z.literal('chat'),text:z.string().trim().min(1).max(500)}),
+  z.object({...base,type:z.literal('debug'),action:z.enum(['start-solo','expire-effects','countdown-to-one'])}),
+  z.object({...base,type:z.literal('debug'),action:z.literal('grant-card'),playerId,cardId:debugCardId,makeTurn:z.boolean().optional()}),
+  z.object({...base,type:z.literal('debug'),action:z.enum(['set-turn','fail-by-guess','clear-hand']),playerId}),
+  z.object({...base,type:z.literal('debug'),action:z.literal('set-attempts'),playerId,attempts:z.number().int().min(1).max(20)}),
   z.object({...base,type:z.literal('admin-skip'),code,turnId}),
   ...(['admin-kick','admin-transfer'] as const).map(type=>z.object({...base,type:z.literal(type),code,playerId})),
   z.object({...base,type:z.literal('admin-close'),code})
@@ -34,10 +40,11 @@ type Client={ws:WebSocket;session:Session;tokens:number;at:number};
 export class Hub {
   rooms=new Map<string,RoomState>(); private clients=new Set<Client>(); private tail:Promise<unknown>=Promise.resolve();
   private away=new Map<string,number>(); private timer?:NodeJS.Timeout; private recent=new Map<string,number>();
-  constructor(private store:Store,private cards:CardProvider,private hostGraceMs=30000){}
+  constructor(private store:Store,private cards:CardProvider,private hostGraceMs=30000,private debugEnabled=false){}
   async init(){for(const r of await this.store.loadRooms())this.rooms.set(r.code,r);this.timer=setInterval(()=>void this.enqueue(async()=>{await this.transferOfflineHosts();await this.expireVisualEffects();}).catch(()=>console.error('Room timer failed')),1000);this.timer.unref();}
   async close(){clearInterval(this.timer);for(const c of this.clients)c.ws.close(1001,'服务正在重启');await this.tail;}
   online(){return new Set([...this.clients].filter(c=>c.ws.readyState===WebSocket.OPEN).map(c=>c.session.playerId));}
+  private onlineFor(r:RoomState){const online=this.online();if(this.debugEnabled)for(const player of r.players)if(!player.left&&player.id==='debug-bot:'+r.code)online.add(player.id);return online;}
   roomFor(id:string){return [...this.rooms.values()].find(r=>r.phase!=='closed'&&r.players.some(p=>p.id===id&&!p.left));}
   private enqueue<T>(fn:()=>Promise<T>):Promise<T>{const task=this.tail.then(fn,fn);this.tail=task.catch(()=>{});return task;}
   send(ws:WebSocket,message:ServerMessage){if(ws.readyState===WebSocket.OPEN){if(ws.bufferedAmount>1024*1024){ws.close(1013,'连接过慢，请重连');return;}ws.send(JSON.stringify(message));}}
@@ -60,17 +67,21 @@ export class Hub {
   }
   private adminRooms():AdminRoom[]{const online=this.online();return [...this.rooms.values()].filter(r=>r.phase!=='closed').map(r=>({code:r.code,phase:r.phase,round:r.round,hostId:r.hostId,turnId:r.turnId,turnPlayerId:r.turnPlayerId,players:E.members(r).map(p=>({id:p.id,name:p.name,online:online.has(p.id)}))}));}
   broadcast(){
-    const online=this.online();
     for(const c of this.clients){
       if(c.session.expiresAt<=Date.now()){c.ws.close(1008,'会话已过期');continue;}
       const r=this.roomFor(c.session.playerId);
-      this.send(c.ws,{type:'snapshot',room:r?E.view(r,c.session.playerId,online):null});
+      this.send(c.ws,{type:'snapshot',room:r?E.view(r,c.session.playerId,this.onlineFor(r),this.debugEnabled&&r.hostId===c.session.playerId):null});
       if(c.session.admin)this.send(c.ws,{type:'admin-rooms',rooms:this.adminRooms()});
     }
   }
   private requireMember(session:Session){const r=this.roomFor(session.playerId);E.requireGame(r,'你尚未进入房间');return r;}
   private precheck(session:Session,c:Command){
     E.requireGame(session.expiresAt>Date.now(),'会话已过期，请刷新页面');
+    if(c.type==='debug'){
+      E.requireGame(this.debugEnabled,'调试控制台仅在本地开发模式可用');
+      const r=this.requireMember(session);
+      E.requireGame(r.hostId===session.playerId,'只有房主可以使用调试控制台');
+    }
     if(c.type.startsWith('admin-'))E.requireGame(session.admin,'需要超级管理员权限');
     if(c.type==='guess'||c.type==='give-up'||c.type==='set-card'){
       const r=this.requireMember(session);
@@ -121,13 +132,14 @@ export class Hub {
           case 'next':host();E.startRound(r,pool);break;
           case 'set-card':E.submitCard(r,session.playerId,card!,c.setupId);break;
           case 'guess':E.guess(r,session.playerId,card!,c.turnId);break;
-          case 'use-item-card':E.useItemCard(r,session.playerId,c.instanceId,c.turnId,c.targetPlayerId,this.online());break;
+          case 'use-item-card':E.useItemCard(r,session.playerId,c.instanceId,c.turnId,c.targetPlayerId,this.onlineFor(r));break;
           case 'give-up':E.giveUp(r,session.playerId,c.turnId);break;
           case 'skip':E.skip(r,session.playerId,c.turnId,r.hostId===session.playerId||session.admin);break;
           case 'kick':host();E.requireGame(c.playerId!==session.playerId,'房主不能移除自己');E.leave(r,c.playerId,this.online(),'房主');break;
           case 'leave':E.leave(r,session.playerId,this.online());break;
           case 'again':host();E.again(r);r.createdAt=Date.now();break;
           case 'chat':r.chat.push({id:c.id,playerId:session.playerId,name:r.players.find(p=>p.id===session.playerId)?.name??session.name,text:c.text,time:Date.now()});r.chat=r.chat.slice(-100);break;
+          case 'debug':host();E.debugAction(r,c);break;
           case 'admin-skip':E.skip(r,session.playerId,c.turnId,true);break;
           case 'admin-kick':E.leave(r,c.playerId,this.online(),'管理员');break;
           case 'admin-transfer':E.requireGame(E.members(r).some(p=>p.id===c.playerId)&&this.online().has(c.playerId),'请选择在线的房间成员');r.hostId=c.playerId;E.system(r,'管理员已转移房主');break;
