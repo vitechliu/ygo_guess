@@ -2,6 +2,87 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import * as E from '../server/engine.js';import {cards} from './fixtures.js';
 function room(n=3,mode:'custom'|'random'='custom',rounds=3,attempts=3){const r=E.createRoom('ABCDEF','p0','p0',{mode,rounds,attempts});for(let i=1;i<n;i++)E.join(r,'p'+i,'p'+i);r.players.forEach(p=>p.ready=true);return r;}
 function setup(r:ReturnType<typeof room>){E.startRound(r,[],true);for(let i=0;i<r.entries.length;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);}
+test('item cards are private, limited to five personal turns and consumed only on own turn',()=>{
+ const r=room(2);setup(r);
+ const first=r.entries[0].itemCards![0];
+ first.cardId='test-card';
+ assert.equal(first.cardId,'test-card');
+ assert.deepEqual(E.view(r,'p0',new Set()).myItemCards,[first]);
+ assert.deepEqual(E.view(r,'p1',new Set()).myItemCards,[]);
+ assert(!JSON.stringify(E.view(r,'p1',new Set())).includes(first.instanceId));
+ assert.throws(()=>E.useItemCard(r,'p1',first.instanceId,r.turnId),/轮到/);
+ E.useItemCard(r,'p0',first.instanceId,r.turnId);
+ assert.equal(r.chat.at(-1)?.text,'p0使用了测试卡');
+ assert.equal(r.chat.at(-1)?.kind,'item-card');
+ assert.equal(r.entries[0].itemCards!.length,0);
+ assert.throws(()=>E.useItemCard(r,'p0',first.instanceId,r.turnId),/手牌/);
+ for(let i=0;i<12;i++)E.skip(r,r.turnPlayerId!,r.turnId);
+ assert.equal(r.entries[0].turns,7);
+ assert.equal(r.entries[0].itemCards!.length,4);
+ assert.equal(r.entries[1].itemCards!.length,5);
+ E.finishRound(r);
+ assert(r.entries.every(e=>e.itemCards?.length===0));
+});
+test('item card weights select only enabled cards at their exact boundaries',()=>{
+ assert.equal(E.drawItemCard(0),'prohibition-card');
+ assert.equal(E.drawItemCard(99),'prohibition-card');
+ assert.equal(E.drawItemCard(100),'maxx-c-card');
+ assert.equal(E.drawItemCard(119),'maxx-c-card');
+ assert.equal(E.drawItemCard(120),'mask-change-card');
+ assert.equal(E.drawItemCard(169),'mask-change-card');
+ assert.throws(()=>E.drawItemCard(170),/抽取/);
+});
+test('prohibition skips the selected player next turn without counting a turn',()=>{
+ const r=room(3);setup(r);
+ const first=r.entries[0].itemCards![0];first.cardId='prohibition-card';
+ assert.throws(()=>E.useItemCard(r,'p0',first.instanceId,r.turnId),/请选择/);
+ assert.throws(()=>E.useItemCard(r,'p0',first.instanceId,r.turnId,'p0'),/请选择/);
+ E.useItemCard(r,'p0',first.instanceId,r.turnId,'p1');
+ assert.equal(r.chat.at(-1)?.kind,'item-card');
+ assert.equal(r.entries[1].skipNextTurns,1);
+ const turn=r.turnId;E.skip(r,'p0',turn);
+ assert.equal(r.turnPlayerId,'p2');assert.equal(r.entries[1].turns,0);
+ assert.equal(r.entries[1].skipNextTurns,0);
+ assert(r.chat.some(message=>message.text==='p1 的回合被禁止卡跳过'&&message.kind==='item-card'));
+ E.skip(r,'p2',r.turnId);E.skip(r,'p0',r.turnId);
+ assert.equal(r.turnPlayerId,'p1');assert.equal(r.entries[1].turns,1);
+});
+test('stacked prohibitions cannot end an active round when every next turn is skipped',()=>{
+ const r=room(2);setup(r);
+ r.entries[0].skipNextTurns=1;r.entries[1].skipNextTurns=2;
+ E.skip(r,'p0',r.turnId);
+ assert.equal(r.phase,'guessing');
+ assert.equal(r.turnPlayerId,'p0');
+ assert.equal(r.entries[0].skipNextTurns,0);
+ assert.equal(r.entries[1].skipNextTurns,0);
+ assert.equal(r.entries[0].turns,2);
+ E.skip(r,'p0',r.turnId);
+ assert.equal(r.turnPlayerId,'p1');
+ assert.equal(r.entries[1].skipNextTurns,0);
+});
+test('timed visual effects preserve answers and mask each player differently',()=>{
+ const r=room(3);setup(r);const original=r.entries.map(e=>e.card?.cid);
+ const maxx=r.entries[0].itemCards![0];maxx.cardId='maxx-c-card';
+ E.useItemCard(r,'p0',maxx.instanceId,r.turnId);
+ assert.equal(r.chat.at(-1)?.kind,'item-card');
+ assert(r.visualEffects?.roaches);
+ assert(r.visualEffects.roaches.endsAt>Date.now()+179000);
+ const mask={instanceId:'mask-instance',cardId:'mask-change-card' as const};r.entries[0].itemCards!.push(mask);
+ E.useItemCard(r,'p0',mask.instanceId,r.turnId);
+ assert.equal(r.chat.at(-1)?.kind,'item-card');
+ const appearances=Object.values(r.visualEffects!.masks!.appearances);
+ assert.equal(appearances.length,3);assert.equal(new Set(appearances.map(a=>a.id)).size,3);
+ assert.deepEqual(r.entries.map(e=>e.card?.cid),original);
+ assert.equal(E.view(r,'p0',new Set()).players[0].card,undefined);
+ assert(E.view(r,'p0',new Set()).visualEffects?.masks?.appearances.p0);
+ E.expireVisualEffects(r,Date.now()+180001);
+ assert.equal(r.visualEffects?.roaches,undefined);assert.equal(r.visualEffects?.masks,undefined);
+});
+test('disabled item cards never enter the hand',()=>{
+ const r=room(2);r.settings.itemCards=false;setup(r);
+ assert(r.entries.every(e=>e.itemCards?.length===0));
+ assert.throws(()=>E.useItemCard(r,'p0','fake',r.turnId),/未开启/);
+});
 test('readiness, minimum size, curated empty pool and unique allocation',()=>{
  const r=room(1);assert.throws(()=>E.startRound(r,[],true),/至少/);
  E.join(r,'p1','p1');assert.throws(()=>E.startRound(r,[],true),/准备/);

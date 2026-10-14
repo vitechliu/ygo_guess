@@ -3,6 +3,35 @@ import {SqliteStore} from '../server/store.js';import {Hub,parseCommand} from '.
 async function harness(){const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-test-'));const store=new SqliteStore(path.join(dir,'test.sqlite'));const hub=new Hub(store,new FixtureCards(),1);await hub.init();return {dir,store,hub,async close(){await hub.close();await store.close();}};}
 const cmd=(body:any)=>({...body,id:randomUUID()}) as Command;
 async function started(h:Hub){await h.handle(session('a'),cmd({type:'create',settings:{mode:'random',rounds:2,attempts:3}}));const r=h.roomFor('a')!;await h.handle(session('b'),cmd({type:'join',code:r.code}));await h.handle(session('b'),cmd({type:'ready',ready:true}));await h.handle(session('a'),cmd({type:'start'}));return h.roomFor('a')!;}
+test('item use is persisted once and rejects forged or stale turns',async()=>{
+ const h=await harness();try{
+  const r=await started(h.hub);const instance=r.entries[0].itemCards![0];const turn=r.turnId;
+  instance.cardId='test-card';
+  assert.throws(()=>parseCommand({id:randomUUID(),type:'use-item-card',instanceId:'bad',turnId:turn}));
+  await assert.rejects(h.hub.handle(session('b'),cmd({type:'use-item-card',instanceId:instance.instanceId,turnId:turn})),/轮到/);
+  const use=cmd({type:'use-item-card',instanceId:instance.instanceId,turnId:turn});
+  await h.hub.handle(session('a'),use);await h.hub.handle(session('a'),use);
+  const saved=(await h.store.loadRooms()).find(room=>room.code===r.code)!;
+  assert.equal(saved.entries[0].itemCards!.length,0);
+  assert.equal(saved.chat.filter((message:{text:string;kind?:string})=>message.text==='a使用了测试卡'&&message.kind==='item-card').length,1);
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'use-item-card',instanceId:instance.instanceId,turnId:turn})),/手牌/);
+  await h.hub.handle(session('a'),cmd({type:'skip',turnId:turn}));
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'use-item-card',instanceId:instance.instanceId,turnId:turn})),/回合/);
+ }finally{await h.close();}
+});
+test('timed card effects survive storage and are removed by the room timer',async()=>{
+ const h=await harness();try{
+  const r=await started(h.hub);const instance=r.entries[0].itemCards![0];instance.cardId='mask-change-card';
+  await h.hub.handle(session('a'),cmd({type:'use-item-card',instanceId:instance.instanceId,turnId:r.turnId}));
+  const saved=(await h.store.loadRooms()).find(room=>room.code===r.code)!;
+  assert.equal(Object.keys(saved.visualEffects.masks.appearances).length,2);
+  assert.equal(new Set(Object.values(saved.visualEffects.masks.appearances).map((hero:any)=>hero.id)).size,2);
+  h.hub.roomFor('a')!.visualEffects!.masks!.endsAt=Date.now()-1;
+  await new Promise(resolve=>setTimeout(resolve,1200));
+  assert.equal(h.hub.roomFor('a')!.visualEffects?.masks,undefined);
+  assert.equal((await h.store.loadRooms()).find(room=>room.code===r.code)?.visualEffects?.masks,undefined);
+ }finally{await h.close();}
+});
 test('only the host can change lobby settings and changed rules require fresh readiness',async()=>{
  const h=await harness();try{
   await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',rounds:2,attempts:3}}));const code=h.hub.roomFor('a')!.code;

@@ -8,7 +8,7 @@ import * as E from './engine.js';
 
 const base={id:z.string().min(1).max(80)};
 const code=z.string().regex(/^[A-Z2-9]{6}$/), playerId=z.string().max(64), turnId=z.string().uuid();
-const settings=z.object({mode:z.enum(['custom','random']),rounds:z.number().int().min(1).max(20),attempts:z.number().int().min(1).max(10)});
+const settings=z.object({mode:z.enum(['custom','random']),rounds:z.number().int().min(1).max(20),attempts:z.number().int().min(1).max(10),itemCards:z.boolean().default(true)});
 const schemas=[
   z.object({...base,type:z.literal('create'),settings}),
   z.object({...base,type:z.literal('update-settings'),settings}),
@@ -17,6 +17,7 @@ const schemas=[
   ...(['start','next','leave','again','admin-list','shuffle'] as const).map(type=>z.object({...base,type:z.literal(type)})),
   z.object({...base,type:z.literal('set-card'),cardId:z.number().int().positive().max(9999999999),setupId:z.string().uuid()}),
   z.object({...base,type:z.literal('guess'),cardId:z.number().int().positive().max(9999999999),turnId}),
+  z.object({...base,type:z.literal('use-item-card'),instanceId:z.string().uuid(),turnId,targetPlayerId:playerId.optional()}),
   z.object({...base,type:z.literal('give-up'),turnId}),
   z.object({...base,type:z.literal('skip'),turnId}),
   z.object({...base,type:z.literal('kick'),playerId}),
@@ -34,7 +35,7 @@ export class Hub {
   rooms=new Map<string,RoomState>(); private clients=new Set<Client>(); private tail:Promise<unknown>=Promise.resolve();
   private away=new Map<string,number>(); private timer?:NodeJS.Timeout; private recent=new Map<string,number>();
   constructor(private store:Store,private cards:CardProvider,private hostGraceMs=30000){}
-  async init(){for(const r of await this.store.loadRooms())this.rooms.set(r.code,r);this.timer=setInterval(()=>void this.enqueue(()=>this.transferOfflineHosts()).catch(()=>console.error('Host transfer failed')),1000);this.timer.unref();}
+  async init(){for(const r of await this.store.loadRooms())this.rooms.set(r.code,r);this.timer=setInterval(()=>void this.enqueue(async()=>{await this.transferOfflineHosts();await this.expireVisualEffects();}).catch(()=>console.error('Room timer failed')),1000);this.timer.unref();}
   async close(){clearInterval(this.timer);for(const c of this.clients)c.ws.close(1001,'服务正在重启');await this.tail;}
   online(){return new Set([...this.clients].filter(c=>c.ws.readyState===WebSocket.OPEN).map(c=>c.session.playerId));}
   roomFor(id:string){return [...this.rooms.values()].find(r=>r.phase!=='closed'&&r.players.some(p=>p.id===id&&!p.left));}
@@ -120,6 +121,7 @@ export class Hub {
           case 'next':host();E.startRound(r,pool);break;
           case 'set-card':E.submitCard(r,session.playerId,card!,c.setupId);break;
           case 'guess':E.guess(r,session.playerId,card!,c.turnId);break;
+          case 'use-item-card':E.useItemCard(r,session.playerId,c.instanceId,c.turnId,c.targetPlayerId);break;
           case 'give-up':E.giveUp(r,session.playerId,c.turnId);break;
           case 'skip':E.skip(r,session.playerId,c.turnId,r.hostId===session.playerId||session.admin);break;
           case 'kick':host();E.requireGame(c.playerId!==session.playerId,'房主不能移除自己');E.leave(r,c.playerId,this.online(),'房主');break;
@@ -152,6 +154,17 @@ export class Hub {
       if(!successor)continue;
       const r=structuredClone(old);r.hostId=successor.id;r.version++;E.system(r,'房主暂时离线，已由 '+successor.name+' 接任');
       await this.store.saveRoom(r);this.rooms.set(r.code,r);this.away.delete(r.code);this.broadcast();
+    }
+  }
+  private async expireVisualEffects(){
+    for(const old of this.rooms.values()){
+      if(!old.visualEffects?.roaches&&!old.visualEffects?.masks)continue;
+      const r=structuredClone(old);
+      if(!E.expireVisualEffects(r))continue;
+      r.version++;
+      await this.store.saveRoom(r);
+      this.rooms.set(r.code,r);
+      this.broadcast();
     }
   }
 }

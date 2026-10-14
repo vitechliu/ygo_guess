@@ -9,7 +9,7 @@ import {api,type User,type Send,type Action} from './game';
 export function Home({user,setUser,send,connected}:{user:User|null;setUser:(u:User)=>void;send:Send;connected:boolean}){
  const initialCode=new URLSearchParams(location.search).get('room')??'';
  const [tab,setTab]=useState(initialCode?'join':'create'),[name,setName]=useState(user?.name??''),[code,setCode]=useState(initialCode.toUpperCase());
- const [settings,setSettings]=useState<Settings>({mode:'custom',rounds:3,attempts:3}),[busy,setBusy]=useState(false),[pendingAction,setPendingAction]=useState<Action|null>(null);
+ const [settings,setSettings]=useState<Settings>({mode:'custom',rounds:3,attempts:3,itemCards:true}),[busy,setBusy]=useState(false),[pendingAction,setPendingAction]=useState<Action|null>(null);
  useEffect(()=>{if(!pendingAction||!connected)return;setPendingAction(null);send(pendingAction).catch(()=>{}).finally(()=>setBusy(false));},[connected,pendingAction,send]);
  const submit=async(e:React.FormEvent)=>{
   e.preventDefault();if(busy)return;setBusy(true);

@@ -1,10 +1,26 @@
 import { randomUUID, randomInt } from 'node:crypto';
-import type { Card, RoomState, RoomView, Settings, Entry } from '../shared/types.js';
+import type { Card, RoomState, RoomView, Settings, Entry, ItemCardId, Chat } from '../shared/types.js';
+import { ITEM_CARDS } from '../shared/item-cards.js';
+import { MASKED_HEROES } from '../shared/masked-heroes.js';
 
 export class GameError extends Error {}
 export function requireGame(value: unknown, message: string): asserts value { if (!value) throw new GameError(message); }
 export const members = (r: RoomState) => r.players.filter(p => !p.left).sort((a,b) => a.seat-b.seat);
-export function system(r: RoomState, text: string, kind?: 'guess-correct' | 'guess-wrong') { r.chat.push({id:randomUUID(),name:'房间消息',text,time:Date.now(),system:true,...(kind?{kind}:{})}); r.chat=r.chat.slice(-100); }
+const drawable=Object.values(ITEM_CARDS).filter(card=>card.weight>0);
+const totalWeight=drawable.reduce((sum,card)=>sum+card.weight,0);
+export function drawItemCard(roll=randomInt(totalWeight)):ItemCardId {
+  requireGame(Number.isInteger(roll)&&roll>=0&&roll<totalWeight,'道具卡抽取数值无效');
+  for(const card of drawable){if(roll<card.weight)return card.id;roll-=card.weight;}
+  throw new GameError('道具卡池未配置');
+}
+export function expireVisualEffects(r:RoomState,now=Date.now()) {
+  if(!r.visualEffects)return false;
+  let changed=false;
+  if(r.visualEffects.roaches&&r.visualEffects.roaches.endsAt<=now){delete r.visualEffects.roaches;changed=true;}
+  if(r.visualEffects.masks&&r.visualEffects.masks.endsAt<=now){delete r.visualEffects.masks;changed=true;}
+  return changed;
+}
+export function system(r: RoomState, text: string, kind?: Chat['kind']) { r.chat.push({id:randomUUID(),name:'房间消息',text,time:Date.now(),system:true,...(kind?{kind}:{})}); r.chat=r.chat.slice(-100); }
 export function createRoom(code: string, playerId: string, name: string, settings: Settings): RoomState {
   return {code,hostId:playerId,settings,phase:'lobby',round:0,players:[{id:playerId,name,seat:0,score:0,ready:false,left:false}],entries:[],turnPlayerId:null,turnId:'',setupId:'',version:0,chat:[],history:[],processed:[],createdAt:Date.now()};
 }
@@ -20,10 +36,10 @@ export function join(r: RoomState, id: string, name: string) {
 }
 export function updateSettings(r:RoomState,settings:Settings) {
   requireGame(r.phase==='lobby','比赛开始后不能修改设置');
-  if(r.settings.mode===settings.mode&&r.settings.rounds===settings.rounds&&r.settings.attempts===settings.attempts)return;
+  if(r.settings.mode===settings.mode&&r.settings.rounds===settings.rounds&&r.settings.attempts===settings.attempts&&(r.settings.itemCards??true)===(settings.itemCards??true))return;
   r.settings=settings;
   for(const p of members(r))if(p.id!==r.hostId)p.ready=false;
-  system(r,'房主修改了规则：'+(settings.mode==='custom'?'好友出题':'随机分配')+' · '+settings.rounds+' 局 · 每局 '+settings.attempts+' 次猜测。请重新准备');
+  system(r,'房主修改了规则：'+(settings.mode==='custom'?'好友出题':'随机分配')+' · '+settings.rounds+' 局 · 每局 '+settings.attempts+' 次猜测 · 道具卡'+(settings.itemCards===false?'关闭':'开启')+'。请重新准备');
 }
 export function shuffleSeats(r:RoomState) {
   requireGame(r.phase==='lobby','比赛开始后不能打乱顺序');
@@ -45,8 +61,8 @@ export function startRound(r: RoomState, pool: Card[] = [], first = false) {
     requireGame(ps.every(p=>p.id===r.hostId||p.ready),'等待所有非房主玩家准备');
   } else requireGame(r.phase==='round-end','当前不能进入下一局');
   if(r.settings.mode==='random') requireGame(new Set(pool.map(c=>c.cid)).size>=ps.length,'精选题库未配置或有效卡牌不足，请配置题库或使用出题模式');
-  r.round++; r.setupId=randomUUID(); r.turnPlayerId=null; r.turnId='';
-  r.entries=ps.map(p=>({playerId:p.id,submitted:false,status:'playing',attempts:r.settings.attempts,turns:0,points:0}));
+  r.round++; r.setupId=randomUUID(); r.turnPlayerId=null; r.turnId='';r.visualEffects={};
+  r.entries=ps.map(p=>({playerId:p.id,submitted:false,status:'playing',attempts:r.settings.attempts,turns:0,points:0,itemCards:[]}));
   if(r.settings.mode==='random') {
     const candidates=[...new Map(pool.map(c=>[c.cid,c])).values()];
     for(const e of r.entries) { const index=randomInt(candidates.length); e.card=candidates.splice(index,1)[0]; e.submitted=true; }
@@ -67,10 +83,53 @@ function beginGuessing(r: RoomState) {
   r.phase='guessing'; const entry=r.entries[(r.round-1)%r.entries.length];
   activate(r,entry);
 }
-function activate(r: RoomState,e: Entry) { e.turns++; r.turnPlayerId=e.playerId; r.turnId=randomUUID(); }
+function activate(r: RoomState,e: Entry) {
+  e.turns++; r.turnPlayerId=e.playerId; r.turnId=randomUUID();
+  if(r.settings.itemCards!==false&&e.turns<=5) {
+    e.itemCards??=[];
+    e.itemCards.push({instanceId:randomUUID(),cardId:drawItemCard()});
+  }
+}
 export function validateTurn(r: RoomState, id: string, turnId: string, force=false) {
   requireGame(r.phase==='guessing'&&r.turnId===turnId,'回合已变化，请以最新状态为准');
   requireGame(force||r.turnPlayerId===id,'还没有轮到你');
+}
+export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:string,targetPlayerId?:string) {
+  validateTurn(r,id,turnId);
+  requireGame(r.settings.itemCards!==false,'本房间未开启道具卡');
+  const e=r.entries.find(e=>e.playerId===id);
+  requireGame(e?.status==='playing','本局已结束');
+  const index=e.itemCards?.findIndex(card=>card.instanceId===instanceId)??-1;
+  requireGame(index>=0,'这张道具卡不在你的手牌中');
+  const instance=e.itemCards![index];
+  const card=ITEM_CARDS[instance.cardId];
+  requireGame(card&&card.timing==='own-turn','道具卡无法在此时使用');
+  const target=targetPlayerId?r.entries.find(entry=>entry.playerId===targetPlayerId):undefined;
+  if(card.id==='prohibition-card')requireGame(target&&target.playerId!==id&&target.status==='playing'&&members(r).some(p=>p.id===targetPlayerId),'请选择仍在本局参赛的其他玩家');
+  else requireGame(!targetPlayerId,'这张道具卡不需要指定玩家');
+  e.itemCards!.splice(index,1);
+  const name=r.players.find(p=>p.id===id)!.name;
+  switch(card.id){
+    case 'prohibition-card':
+      target!.skipNextTurns=(target!.skipNextTurns??0)+1;
+      system(r,name+'对 '+r.players.find(p=>p.id===targetPlayerId)!.name+' 使用了禁止卡，下次回合将被跳过','item-card');
+      break;
+    case 'maxx-c-card':
+      r.visualEffects??={};
+      r.visualEffects.roaches={id:randomUUID(),endsAt:Date.now()+180000};
+      system(r,name+'使用了增殖卡，可爱蟑螂出现了（3 分钟）','item-card');
+      break;
+    case 'mask-change-card': {
+      const available=[...MASKED_HEROES];
+      const appearances:Record<string,(typeof MASKED_HEROES)[number]>={};
+      for(const entry of r.entries.filter(entry=>entry.status!=='left'))appearances[entry.playerId]=available.splice(randomInt(available.length),1)[0];
+      r.visualEffects??={};
+      r.visualEffects.masks={id:randomUUID(),endsAt:Date.now()+60000,appearances};
+      system(r,name+'使用了假面卡，场上的卡牌换上了假面英雄外观（1 分钟）','item-card');
+      break;
+    }
+    case 'test-card':system(r,name+'使用了测试卡','item-card');break;
+  }
 }
 export function guess(r: RoomState,id: string,card: Card,turnId: string) {
   validateTurn(r,id,turnId);
@@ -102,13 +161,18 @@ export function skip(r:RoomState,id:string,turnId:string,force=false) {
 }
 function advance(r:RoomState) {
   const current=r.entries.findIndex(e=>e.playerId===r.turnPlayerId);
-  for(let step=1;step<=r.entries.length;step++) {
+  const pendingSkips=r.entries.reduce((count,e)=>count+(e.status==='playing'?(e.skipNextTurns??0):0),0);
+  for(let step=1;step<=r.entries.length+pendingSkips;step++) {
     const e=r.entries[(current+step)%r.entries.length];
-    if(e.status==='playing') { activate(r,e); return; }
+    if(e.status!=='playing')continue;
+    if((e.skipNextTurns??0)>0){e.skipNextTurns=(e.skipNextTurns??0)-1;system(r,(r.players.find(p=>p.id===e.playerId)?.name??'玩家')+' 的回合被禁止卡跳过','item-card');continue;}
+    activate(r,e);return;
   }
   finishRound(r);
 }
 export function finishRound(r:RoomState,early=false) {
+  for(const e of r.entries){e.itemCards=[];e.skipNextTurns=0;}
+  r.visualEffects={};
   if(r.round>0&&!r.history.some(h=>h.round===r.round)) {
     for(const e of r.entries) if(e.status==='playing')e.status='failed';
     r.history.push({round:r.round,entries:structuredClone(r.entries)});
@@ -139,7 +203,7 @@ export function leave(r:RoomState,id:string,online:Set<string>,removedBy?:'房�
 export function again(r:RoomState) {
   requireGame(r.phase==='match-end','比赛尚未结束');
   r.players=members(r).map((p,i)=>({...p,score:0,ready:false,seat:i}));
-  r.round=0;r.entries=[];r.history=[];r.phase='lobby';r.turnId='';r.setupId='';r.turnPlayerId=null;
+  r.round=0;r.entries=[];r.history=[];r.phase='lobby';r.turnId='';r.setupId='';r.turnPlayerId=null;r.visualEffects={};
   system(r,'新比赛已创建，请准备');
 }
 export function view(r:RoomState,selfId:string,online:Set<string>):RoomView {
@@ -153,7 +217,7 @@ export function view(r:RoomState,selfId:string,online:Set<string>):RoomView {
       return {...p,online:online.has(p.id),waiting:r.phase!=='lobby'&&(!e||e.status==='left')&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,
         ...(e?.card&&(reveal||(r.phase==='guessing'&&(!participant||p.id!==selfId||e.status==='solved')))?{card:e.card}:{})};
     }),
-    chat:r.chat,
+    chat:r.chat,myItemCards:participant?(r.entries[index].itemCards??[]):[],visualEffects:r.visualEffects,
     ...(r.phase==='setting'&&participant?{nextPlayerName:r.players.find(p=>p.id===next?.playerId)?.name,mySubmittedCard:r.entries[index].submitted?next?.card:undefined}:{}),
     history:participant?r.history:[]};
 }
