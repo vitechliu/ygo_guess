@@ -98,7 +98,7 @@ export function createRoom(code: string, playerId: string, name: string, setting
 }
 export function join(r: RoomState, id: string, name: string) {
   requireGame(r.phase!=='closed','房间已关闭');
-  requireGame(members(r).length<8,'房间已满（最多8人）');
+  requireGame(members(r).length<10,'房间已满（最多10人）');
   const previous=r.players.find(p=>p.id===id);
   requireGame(!previous||previous.left,'你已经在这个房间中');
   const seat=Math.max(-1,...r.players.map(p=>p.seat))+1;

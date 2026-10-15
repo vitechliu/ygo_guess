@@ -331,7 +331,7 @@ test('disabled item cards never enter the hand',()=>{
 test('readiness, minimum size, curated empty pool and unique allocation',()=>{
  const r=room(1);assert.throws(()=>E.startRound(r,[],true),/至少/);
  E.join(r,'p1','p1');assert.throws(()=>E.startRound(r,[],true),/准备/);
- const random=room(8,'random');assert.throws(()=>E.startRound(random,[],true),/题库/);assert.equal(random.round,0);E.startRound(random,cards,true);assert.equal(new Set(random.entries.map(e=>e.card?.cid)).size,8);
+ const random=room(10,'random');assert.throws(()=>E.startRound(random,[],true),/题库/);assert.equal(random.round,0);E.startRound(random,cards,true);assert.equal(new Set(random.entries.map(e=>e.card?.cid)).size,10);
 });
 test('lobby shuffles change seat order and drive both card assignment and turns',()=>{
  assert.throws(()=>E.shuffleSeats(room(1)),/至少/);
