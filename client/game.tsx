@@ -21,6 +21,15 @@ export function useGame(user:User|null){
       ws.onmessage=e=>{
         const m=JSON.parse(e.data) as ServerMessage;
         if(m.type==='snapshot')setRoom(m.room);
+        else if(m.type==='drawing-stroke')setRoom(current=>{
+          if(!current?.drawing||current.drawing.id!==m.drawingId)return current;
+          const strokes=current.drawingStrokes??[];
+          if(m.continuation&&strokes.length){
+            const last=strokes.at(-1)!;
+            return {...current,drawingStrokes:[...strokes.slice(0,-1),{points:[...last.points,...m.points]}]};
+          }
+          return {...current,drawingStrokes:[...strokes,{points:m.points}]};
+        });
         else if(m.type==='admin-rooms')setAdminRooms(m.rooms);
         else if(m.type==='ack'||m.type==='error'){
           const p=m.id?pending.current.get(m.id):undefined;

@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { z } from 'zod';
-import type { Command, Session, RoomState, ServerMessage, AdminRoom, Card } from '../shared/types.js';
+import type { Command, Session, RoomState, ServerMessage, AdminRoom, Card, DrawingStroke } from '../shared/types.js';
 import type { Store, Audit } from './store.js';
 import type { CardProvider } from './cards.js';
 import { ITEM_CARDS } from '../shared/item-cards.js';
@@ -20,6 +20,8 @@ const schemas=[
   z.object({...base,type:z.literal('set-card'),cardId:z.number().int().positive().max(9999999999),setupId:z.string().uuid()}),
   z.object({...base,type:z.literal('guess'),cardId:z.number().int().positive().max(9999999999),turnId}),
   z.object({...base,type:z.literal('use-item-card'),instanceId:z.string().uuid(),turnId,targetPlayerId:playerId.optional()}),
+  z.object({...base,type:z.literal('drawing-close'),drawingId:z.string().uuid()}),
+  z.object({...base,type:z.literal('drawing-stroke'),drawingId:z.string().uuid(),continuation:z.boolean(),points:z.array(z.tuple([z.number().int().min(0).max(800),z.number().int().min(0).max(500)])).min(1).max(48)}),
   z.object({...base,type:z.literal('give-up'),turnId}),
   z.object({...base,type:z.literal('skip'),turnId}),
   z.object({...base,type:z.literal('kick'),playerId}),
@@ -36,9 +38,10 @@ export function parseCommand(raw:unknown):Command {
   for(const schema of schemas){const value=schema.safeParse(raw);if(value.success)return value.data as Command;}
   throw new E.GameError('操作格式不正确');
 }
-type Client={ws:WebSocket;session:Session;tokens:number;at:number};
+type Client={ws:WebSocket;session:Session;tokens:number;at:number;drawTokens:number;drawAt:number};
 export class Hub {
   rooms=new Map<string,RoomState>(); private clients=new Set<Client>(); private tail:Promise<unknown>=Promise.resolve();
+  private drawings=new Map<string,{id:string;strokes:DrawingStroke[];pointCount:number}>();
   private away=new Map<string,number>(); private timer?:NodeJS.Timeout; private recent=new Map<string,number>();
   constructor(private store:Store,private cards:CardProvider,private hostGraceMs=30000,private debugEnabled=false){}
   async init(){for(const r of await this.store.loadRooms())this.rooms.set(r.code,r);this.timer=setInterval(()=>void this.enqueue(async()=>{await this.transferOfflineHosts();await this.expireVisualEffects();}).catch(()=>console.error('Room timer failed')),1000);this.timer.unref();}
@@ -49,14 +52,22 @@ export class Hub {
   private enqueue<T>(fn:()=>Promise<T>):Promise<T>{const task=this.tail.then(fn,fn);this.tail=task.catch(()=>{});return task;}
   send(ws:WebSocket,message:ServerMessage){if(ws.readyState===WebSocket.OPEN){if(ws.bufferedAmount>1024*1024){ws.close(1013,'连接过慢，请重连');return;}ws.send(JSON.stringify(message));}}
   attach(ws:WebSocket,session:Session){
-    const c={ws,session,tokens:30,at:Date.now()};this.clients.add(c);
+    const c={ws,session,tokens:30,at:Date.now(),drawTokens:24,drawAt:Date.now()};this.clients.add(c);
     const hosted=this.roomFor(session.playerId);if(hosted?.hostId===session.playerId)this.away.delete(hosted.code);
     this.broadcast();
     ws.on('message',data=>{
-      const now=Date.now();c.tokens=Math.min(30,c.tokens+(now-c.at)/1000*5);c.at=now;
-      if(c.tokens<1){this.send(ws,{type:'error',message:'操作过于频繁，请稍候'});return;}c.tokens--;
       let command:Command;
       try{command=parseCommand(JSON.parse(data.toString()));}catch{this.send(ws,{type:'error',message:'操作格式不正确'});return;}
+      const now=Date.now();
+      if(command.type==='drawing-stroke'){
+        c.drawTokens=Math.min(24,c.drawTokens+(now-c.drawAt)/1000*15);c.drawAt=now;
+        if(c.drawTokens<1){this.send(ws,{type:'error',id:command.id,message:'绘画太快，请稍候'});return;}c.drawTokens--;
+        try{this.handleDrawingStroke(session,command);this.send(ws,{type:'ack',id:command.id});}
+        catch(error){this.send(ws,{type:'error',id:command.id,message:error instanceof E.GameError?error.message:'绘画失败'});}
+        return;
+      }
+      c.tokens=Math.min(30,c.tokens+(now-c.at)/1000*5);c.at=now;
+      if(c.tokens<1){this.send(ws,{type:'error',id:command.id,message:'操作过于频繁，请稍候'});return;}c.tokens--;
       void this.handle(session,command).then(result=>{if(result)this.send(ws,result);this.send(ws,{type:'ack',id:command.id});}).catch(error=>{
         if(!(error instanceof E.GameError))console.error('Command failed:',error instanceof Error?error.message:'unknown');
         this.send(ws,{type:'error',id:command.id,message:error instanceof E.GameError?error.message:'保存失败，请重试'});
@@ -66,11 +77,27 @@ export class Hub {
     ws.on('error',()=>{});
   }
   private adminRooms():AdminRoom[]{const online=this.online();return [...this.rooms.values()].filter(r=>r.phase!=='closed').map(r=>({code:r.code,phase:r.phase,round:r.round,hostId:r.hostId,turnId:r.turnId,turnPlayerId:r.turnPlayerId,players:E.members(r).map(p=>({id:p.id,name:p.name,online:online.has(p.id)}))}));}
+  private handleDrawingStroke(session:Session,c:Extract<Command,{type:'drawing-stroke'}>){
+    E.requireGame(session.expiresAt>Date.now(),'会话已过期');
+    const room=this.roomFor(session.playerId);
+    E.requireGame(room?.phase==='guessing'&&room.drawing?.id===c.drawingId&&room.drawing.drawerId===session.playerId,'当前不能绘画');
+    let drawing=this.drawings.get(room.code);
+    if(!drawing||drawing.id!==c.drawingId){drawing={id:c.drawingId,strokes:[],pointCount:0};this.drawings.set(room.code,drawing);}
+    E.requireGame(drawing.pointCount+c.points.length<=12000,'画板已达到笔画上限，请关闭画板');
+    E.requireGame(!c.continuation||drawing.strokes.length>0,'笔画已失效，请重新落笔');
+    if(c.continuation)drawing.strokes.at(-1)!.points.push(...c.points);
+    else {E.requireGame(drawing.strokes.length<500,'画板已达到笔画上限，请关闭画板');drawing.strokes.push({points:[...c.points]});}
+    drawing.pointCount+=c.points.length;
+    for(const client of this.clients)if(this.roomFor(client.session.playerId)?.code===room.code)this.send(client.ws,{type:'drawing-stroke',drawingId:c.drawingId,points:c.points,continuation:c.continuation});
+  }
   broadcast(){
+    for(const [code,drawing] of this.drawings)if(this.rooms.get(code)?.drawing?.id!==drawing.id)this.drawings.delete(code);
     for(const c of this.clients){
       if(c.session.expiresAt<=Date.now()){c.ws.close(1008,'会话已过期');continue;}
       const r=this.roomFor(c.session.playerId);
-      this.send(c.ws,{type:'snapshot',room:r?E.view(r,c.session.playerId,this.onlineFor(r),this.debugEnabled&&r.hostId===c.session.playerId):null});
+      const view=r?E.view(r,c.session.playerId,this.onlineFor(r),this.debugEnabled&&r.hostId===c.session.playerId):null;
+      if(view?.drawing)view.drawingStrokes=this.drawings.get(r!.code)?.id===view.drawing.id?this.drawings.get(r!.code)!.strokes:[];
+      this.send(c.ws,{type:'snapshot',room:view});
       if(c.session.admin)this.send(c.ws,{type:'admin-rooms',rooms:this.adminRooms()});
     }
   }
@@ -133,6 +160,8 @@ export class Hub {
           case 'set-card':E.submitCard(r,session.playerId,card!,c.setupId);break;
           case 'guess':E.guess(r,session.playerId,card!,c.turnId);break;
           case 'use-item-card':E.useItemCard(r,session.playerId,c.instanceId,c.turnId,c.targetPlayerId,this.onlineFor(r));break;
+          case 'drawing-close':E.requireGame(r.drawing?.id===c.drawingId&&r.drawing.drawerId===session.playerId,'只有绘画者可以关闭画板');r.drawing=undefined;E.system(r,'绘画结束，画板已关闭','item-card');break;
+          case 'drawing-stroke':throw new E.GameError('绘画消息无法保存');
           case 'give-up':E.giveUp(r,session.playerId,c.turnId);break;
           case 'skip':E.skip(r,session.playerId,c.turnId,r.turnPlayerId!==session.playerId&&(r.hostId===session.playerId||session.admin));break;
           case 'kick':host();E.requireGame(c.playerId!==session.playerId,'房主不能移除自己');E.leave(r,c.playerId,this.online(),'房主');break;

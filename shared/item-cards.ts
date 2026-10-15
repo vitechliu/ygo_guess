@@ -140,4 +140,8 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
     id: 'music-card', name: '音乐卡', category: 'monster', reference: '多之七音服·丘蒂娅',
     image: '/music-item-card.webp', description: '随机播放一首游戏王音乐；如果正在播放，就换一首。', timing: 'own-turn', weight: 50,
   },
+  'ecole-card': {
+    id: 'ecole-card', name: '忘我卡', category: 'spell', reference: '忘我画派',
+    image: '/ecole-item-card.webp', description: '选择一名其他在线玩家，请他画出你的卡牌线索；画面会展示给所有人。', timing: 'own-turn', weight: 50,
+  },
 };

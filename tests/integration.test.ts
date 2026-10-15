@@ -1,8 +1,43 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,readFile,writeFile} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import {request as httpRequest} from 'node:http';import {randomUUID,createHash} from 'node:crypto';import {WebSocket} from 'ws';
+import {EventEmitter} from 'node:events';
 import {SqliteStore} from '../server/store.js';import {Hub,parseCommand} from '../server/hub.js';import {FileCache} from '../server/cache.js';import {Cards} from '../server/cards.js';import {createApp} from '../server/app.js';import {FixtureCards,cards,session} from './fixtures.js';import type {Command,ServerMessage,RoomView} from '../shared/types.js';
 async function harness(){const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-test-'));const store=new SqliteStore(path.join(dir,'test.sqlite'));const hub=new Hub(store,new FixtureCards(),1);await hub.init();return {dir,store,hub,async close(){await hub.close();await store.close();}};}
 const cmd=(body:any)=>({...body,id:randomUUID()}) as Command;
 async function started(h:Hub){await h.handle(session('a'),cmd({type:'create',settings:{mode:'random',rounds:2,attempts:3}}));const r=h.roomFor('a')!;await h.handle(session('b'),cmd({type:'join',code:r.code}));await h.handle(session('b'),cmd({type:'ready',ready:true}));await h.handle(session('a'),cmd({type:'start'}));return h.roomFor('a')!;}
+test('drawing stream is live, private to the chosen drawer, and recoverable on reconnect',async()=>{
+ const h=await harness();
+ class Socket extends EventEmitter {
+   readyState:number=WebSocket.OPEN;
+   messages:ServerMessage[]=[];
+   send(data:string){this.messages.push(JSON.parse(data) as ServerMessage);}
+   close(){this.readyState=WebSocket.CLOSED;this.emit('close');}
+ }
+ try{
+   const r=await started(h.hub);
+   const a=new Socket(),b=new Socket();
+   h.hub.attach(a as unknown as WebSocket,session('a'));
+   h.hub.attach(b as unknown as WebSocket,session('b'));
+   const item={instanceId:randomUUID(),cardId:'ecole-card' as const};r.entries[0].itemCards!.push(item);
+   await h.hub.handle(session('a'),cmd({type:'use-item-card',instanceId:item.instanceId,turnId:r.turnId,targetPlayerId:'b'}));
+   const drawing=h.hub.roomFor('a')!.drawing!;
+   const stroke=cmd({type:'drawing-stroke',drawingId:drawing.id,points:[[10,20],[80,90]],continuation:false});
+   assert.throws(()=>parseCommand({...stroke,points:[[900,20]]}),/格式/);
+   a.emit('message',Buffer.from(JSON.stringify(stroke)));
+   assert(a.messages.some(m=>m.type==='error'&&m.id===stroke.id));
+   b.emit('message',Buffer.from(JSON.stringify(stroke)));
+   assert(a.messages.some(m=>m.type==='drawing-stroke'&&m.drawingId===drawing.id));
+   assert(b.messages.some(m=>m.type==='ack'&&m.id===stroke.id));
+   b.close();
+   const reconnected=new Socket();h.hub.attach(reconnected as unknown as WebSocket,session('b'));
+   const snapshot=reconnected.messages.find(m=>m.type==='snapshot'&&m.room?.drawing?.id===drawing.id);
+   assert.deepEqual(snapshot?.type==='snapshot'?snapshot.room?.drawingStrokes:undefined,[{points:[[10,20],[80,90]]}]);
+   await assert.rejects(h.hub.handle(session('a'),cmd({type:'drawing-close',drawingId:drawing.id})),/只有绘画者/);
+   await h.hub.handle(session('b'),cmd({type:'drawing-close',drawingId:drawing.id}));
+   assert.equal(h.hub.roomFor('a')!.drawing,undefined);
+   assert(reconnected.messages.some(m=>m.type==='snapshot'&&!m.room?.drawing));
+   a.close();reconnected.close();
+ }finally{await h.close();}
+});
 test('host skipping their own turn uses the normal notice, while skipping another player is forced',async()=>{
  const h=await harness();try{
   let r=await started(h.hub);

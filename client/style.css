@@ -76,3 +76,15 @@
 .item-card-synchro{--item-border:#e7e6dd;background:linear-gradient(135deg,#d8d7ce,#676b68);color:#172323}.item-card-synchro select{background:#f4f3eb;color:#172323;border-color:#697773}.item-card-synchro button{border-color:#536c61}
 @media(prefers-reduced-motion:reduce){.flower-rain,.meteor-rock,.meteor-flash,.cyclone-orbit{display:none}.meteor-impact-card,.meteor-crater,.cyclone-flip-card,.storm-flip-card{animation:none}.meteor-crater{opacity:1}}
 .music-player{display:flex;align-items:center;gap:8px;min-width:0;padding:5px 7px 5px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);font-size:.75rem}.music-player>span{max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.music-player small{color:var(--muted-foreground);font-size:.68rem}.music-player button{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;border:0;border-radius:6px;padding:5px 7px;background:var(--secondary);color:var(--foreground);cursor:pointer}.music-player button:focus-visible{outline:2px solid var(--ring);outline-offset:2px}@media(max-width:750px){.room-heading-actions{flex-wrap:wrap}.music-player{order:1;width:100%;justify-content:space-between}.music-player>span{max-width:none;flex:1}}
+
+/* 忘我卡的共享画板 */
+.drawing-overlay{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:20px;background:rgba(13,20,35,.7)}
+.drawing-panel{width:min(880px,100%);max-height:100%;overflow:auto;padding:18px;background:#f7f3e9;border:2px solid #273449;border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.35);color:#253047}
+.drawing-heading{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:14px}
+.drawing-heading div{display:grid;gap:4px}.drawing-heading strong{font-size:19px}.drawing-heading span{font-size:14px}
+.drawing-heading button{padding:9px 16px;border:0;border-radius:9px;background:#253047;color:white;font-weight:700;cursor:pointer}
+.drawing-heading button:disabled{opacity:.5;cursor:default}
+.drawing-canvas{display:block;width:100%;height:auto;aspect-ratio:8 / 5;background:#fff;border:1px solid #c6cbd2;border-radius:8px;touch-action:none}
+.drawing-canvas.can-draw{cursor:crosshair}
+.drawing-panel p{margin:12px 2px 0;color:#566173;font-size:13px}
+@media(max-width:600px){.drawing-overlay{padding:10px}.drawing-panel{padding:12px}.drawing-heading strong{font-size:16px}}

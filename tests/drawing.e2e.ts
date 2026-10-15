@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, mkdir } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { chromium } from 'playwright';
+import { createApp } from '../server/app.js';
+import { SqliteStore } from '../server/store.js';
+import { FixtureCards, cards } from './fixtures.js';
+import * as E from '../server/engine.js';
+
+const directory=await mkdtemp(path.join(os.tmpdir(),'ygoguess-drawing-'));
+const store=new SqliteStore(path.join(directory,'room.sqlite'));
+const app=await createApp({store,cards:new FixtureCards(),dev:true});
+await new Promise<void>(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+const base='http://127.0.0.1:'+(app.server.address() as {port:number}).port;
+const browser=await chromium.launch({headless:true,...(process.env.BROWSER_PATH?{executablePath:process.env.BROWSER_PATH}:{})});
+try {
+  const first=await browser.newContext({viewport:{width:1280,height:900}});
+  const second=await browser.newContext({viewport:{width:390,height:844}});
+  const user=await first.newPage(),drawer=await second.newPage();
+  await user.goto(base);
+  await user.getByLabel('你的昵称').fill('使用者');
+  await user.getByRole('button',{name:'创建房间，邀请朋友'}).click();
+  const code=(await user.locator('.code-copy').innerText()).trim();
+  await drawer.goto(base+'/?room='+code);
+  await drawer.getByLabel('你的昵称').fill('绘画者');
+  await drawer.getByRole('button',{name:'加入牌桌',exact:true}).click();
+  await drawer.locator('.code-copy').waitFor();
+  const room=app.hub.roomFor((await (await user.request.get(base+'/api/session')).json()).session.playerId)!;
+  assert.equal(room.players.filter(player=>!player.left).length,2);
+  room.players.forEach(player=>player.ready=true);
+  E.startRound(room,[],true);
+  for(let i=0;i<2;i++)E.submitCard(room,room.entries[i].playerId,cards[i],room.setupId);
+  const holder=room.entries.find(entry=>entry.playerId===room.turnPlayerId)!;
+  holder.itemCards!.push({instanceId:randomUUID(),cardId:'ecole-card'});
+  app.hub.broadcast();
+  const current=holder.playerId===room.players[0].id?user:drawer;
+  const artist=current===user?drawer:user;
+  await current.getByLabel(/忘我卡目标/).selectOption(artist===user?room.players[0].id:room.players[1].id);
+  await current.locator('.item-card').filter({hasText:'忘我卡'}).getByRole('button',{name:'使用道具卡'}).click();
+  await artist.getByRole('dialog',{name:'忘我卡画板'}).waitFor();
+  const board=artist.getByLabel('共享画板');
+  const box=await board.boundingBox();assert(box);
+  await artist.mouse.move(box.x+box.width*.2,box.y+box.height*.2);
+  await artist.mouse.down();
+  await artist.mouse.move(box.x+box.width*.5,box.y+box.height*.5,{steps:12});
+  await artist.mouse.move(box.x+box.width*.8,box.y+box.height*.25,{steps:12});
+  await artist.mouse.up();
+  await current.waitForTimeout(400);
+  const spectatorBoard=current.getByLabel('共享画板');
+  const pixels=await spectatorBoard.evaluate((canvas:HTMLCanvasElement)=>{
+    const image=canvas.getContext('2d')!.getImageData(0,0,800,500).data;
+    let count=0;for(let i=3;i<image.length;i+=4)if(image[i]>0)count++;return count;
+  });
+  assert(pixels>100,'spectator received visible lines');
+  await mkdir('test-results',{recursive:true});
+  await artist.screenshot({path:'test-results/drawing-mobile.png',fullPage:true});
+  await current.screenshot({path:'test-results/drawing-desktop.png',fullPage:true});
+  await artist.getByRole('button',{name:'关闭画板'}).click();
+  await current.getByRole('dialog',{name:'忘我卡画板'}).waitFor({state:'detached'});
+  console.log('PASS drawing board live sync, mobile and desktop layout, artist close');
+} finally {
+  await browser.close();
+  await app.close();
+  await store.close();
+}

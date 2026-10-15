@@ -20,8 +20,8 @@ export function ItemHand({room,send,connected}:{room:RoomView;send:Send;connecte
     {room.myItemCards.length?<div className="item-hand-list">{room.myItemCards.map(instance=>{
       const card=ITEM_CARDS[instance.cardId];
       if(!card)return null;
-      const needsTarget=card.id==='prohibition-card'||card.id==='fireball-card'||card.id==='god-rage-card'||card.id==='moon-book-card'||card.id==='reborn-card'||card.id==='hint-card'||card.id==='clown-card'||card.id==='friendship-card'||card.id==='snatch-card'||card.id==='cyclone-card';
-      const choices=card.id==='prohibition-card'||card.id==='friendship-card'?eligible:card.id==='reborn-card'?revivable:card.id==='hint-card'?onlinePlayers:card.id==='snatch-card'?snatchable:card.id==='clown-card'?anyOtherPlayer:card.id==='cyclone-card'?anyCard:cardsOnTable;
+      const needsTarget=card.id==='prohibition-card'||card.id==='fireball-card'||card.id==='god-rage-card'||card.id==='moon-book-card'||card.id==='reborn-card'||card.id==='hint-card'||card.id==='ecole-card'||card.id==='clown-card'||card.id==='friendship-card'||card.id==='snatch-card'||card.id==='cyclone-card';
+      const choices=card.id==='prohibition-card'||card.id==='friendship-card'?eligible:card.id==='reborn-card'?revivable:card.id==='hint-card'||card.id==='ecole-card'?onlinePlayers:card.id==='snatch-card'?snatchable:card.id==='clown-card'?anyOtherPlayer:card.id==='cyclone-card'?anyCard:cardsOnTable;
       return <article className={'item-card item-card-'+card.category} key={instance.instanceId}>
         <div className="item-card-title"><strong>{card.name}</strong><small>{card.category==='spell'?'魔法卡':card.category==='trap'?'陷阱卡':card.category==='xyz'?'超量怪兽':card.category==='synchro'?'同调怪兽':'怪兽卡'}</small></div>
         <img src={card.image} alt={card.name+'卡图'}/>

@@ -75,6 +75,25 @@ test('music playback state is shared during a round and cleared at settlement',(
  E.finishRound(r);
  assert.equal(E.view(r,'p0',new Set()).music,undefined);
 });
+test('ecole card requires another online player and clears its board at settlement or departure',()=>{
+ const r=room(3);setup(r);
+ const item=r.entries[0].itemCards![0];item.cardId='ecole-card';
+ assert.equal(ITEM_CARDS['ecole-card'].weight,50);
+ assert.throws(()=>E.useItemCard(r,'p0',item.instanceId,r.turnId),/在线/);
+ assert.throws(()=>E.useItemCard(r,'p0',item.instanceId,r.turnId,'p0',new Set(['p0'])),/在线/);
+ assert.throws(()=>E.useItemCard(r,'p0',item.instanceId,r.turnId,'p1'),/在线/);
+ E.useItemCard(r,'p0',item.instanceId,r.turnId,'p1',new Set(['p1']));
+ assert.equal(r.entries[0].itemCards!.length,0);
+ assert.equal(r.drawing?.drawerId,'p1');
+ assert.equal(r.drawing?.userId,'p0');
+ assert.deepEqual(E.view(r,'p2',new Set()).drawing,r.drawing);
+ assert.equal(r.chat.at(-1)?.kind,'item-card');
+ E.leave(r,'p1',new Set(['p0','p2']));
+ assert.equal(r.drawing,undefined);
+ r.drawing={id:'second',userId:'p0',drawerId:'p2'};
+ E.finishRound(r);
+ assert.equal(r.drawing,undefined);
+});
 test('book of moon covers only the selected card for three minutes and expires cleanly',()=>{
  const r=room(3);setup(r);
  const item=r.entries[0].itemCards![0];item.cardId='moon-book-card';
