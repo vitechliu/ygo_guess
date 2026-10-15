@@ -36,3 +36,4 @@
 | 地碎卡 | [地碎](https://ygocdb.com/card/97169186) | 待上线 | 剩余猜测次数最少的一名场上玩家，其卡图出现裂痕 5 分钟。 | 权重 100；ID：`ground-break-card`；最少次数并列时随机选一名。 |
 | 日书卡 | [日全食之书](https://ygocdb.com/card/35480699) | 待上线 | 全部场上卡牌盖放 1 分钟，遮住卡图、卡名和放大入口。 | 权重 20；ID：`eclipse-book-card`；沿用月书卡背。 |
 | 天变卡 | [天变地异](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=5392&ope=2&request_locale=ja) | 待上线 | 每位场上玩家随机获得旋风、风暴、陨石、火球、外神、地碎或雷击卡中的一张。 | 权重 20；ID：`convulsion-card`；分别加入各自私有手牌，等本人回合使用。 |
+| 音乐卡 | [多之七音服·丘蒂娅](https://www.ygocdb.com/card/55226153) | 待上线 | 随机播放一首游戏王音乐；再次使用时重新选曲。 | 权重 50；ID：`music-card`；原创音乐主题插画；曲库在 `shared/music.ts`，现有 7 个用户提供的网易云歌曲 ID，曲名及站外播放尚待实测；玩家可单独关闭或开启音乐，默认音量 18%。 |

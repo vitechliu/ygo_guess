@@ -1,5 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import * as E from '../server/engine.js';import {cards} from './fixtures.js';
+import { ITEM_CARDS } from '../shared/item-cards.js';
+import { PLAYABLE_MUSIC_TRACKS, musicCandidates } from '../shared/music.js';
 function room(n=3,mode:'custom'|'random'='custom',rounds=3,attempts=3){const r=E.createRoom('ABCDEF','p0','p0',{mode,rounds,attempts});for(let i=1;i<n;i++)E.join(r,'p'+i,'p'+i);r.players.forEach(p=>p.ready=true);return r;}
 function setup(r:ReturnType<typeof room>,withTestCards=true){E.startRound(r,[],true);for(let i=0;i<r.entries.length;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);if(withTestCards&&r.settings.itemCards!==false)for(const e of r.entries)e.itemCards!.push({instanceId:'test-'+e.playerId,cardId:'test-card'});}
 test('item cards arrive on every third personal turn and can only be consumed on own turn',()=>{
@@ -31,70 +33,47 @@ test('item cards arrive on every third personal turn and can only be consumed on
  E.finishRound(r);
  assert(r.entries.every(e=>e.itemCards?.length===0));
 });
-test('item card weights select only enabled cards at their exact boundaries',()=>{
- assert.equal(E.drawItemCard(0),'prohibition-card');
- assert.equal(E.drawItemCard(99),'prohibition-card');
- assert.equal(E.drawItemCard(100),'maxx-c-card');
- assert.equal(E.drawItemCard(119),'maxx-c-card');
- assert.equal(E.drawItemCard(120),'mask-change-card');
- assert.equal(E.drawItemCard(169),'mask-change-card');
- assert.equal(E.drawItemCard(170),'chance-card');
- assert.equal(E.drawItemCard(319),'chance-card');
- assert.equal(E.drawItemCard(320),'lightning-card');
- assert.equal(E.drawItemCard(369),'lightning-card');
- assert.equal(E.drawItemCard(370),'fireball-card');
- assert.equal(E.drawItemCard(519),'fireball-card');
- assert.equal(E.drawItemCard(520),'outer-entity-card');
- assert.equal(E.drawItemCard(549),'outer-entity-card');
- assert.equal(E.drawItemCard(550),'god-rage-card');
- assert.equal(E.drawItemCard(599),'god-rage-card');
- assert.equal(E.drawItemCard(600),'crossout-card');
- assert.equal(E.drawItemCard(619),'crossout-card');
- assert.equal(E.drawItemCard(620),'scanner-card');
- assert.equal(E.drawItemCard(719),'scanner-card');
- assert.equal(E.drawItemCard(720),'moon-book-card');
- assert.equal(E.drawItemCard(819),'moon-book-card');
- assert.equal(E.drawItemCard(820),'reborn-card');
- assert.equal(E.drawItemCard(839),'reborn-card');
- assert.equal(E.drawItemCard(840),'void-card');
- assert.equal(E.drawItemCard(869),'void-card');
- assert.equal(E.drawItemCard(870),'reversal-card');
- assert.equal(E.drawItemCard(899),'reversal-card');
- assert.equal(E.drawItemCard(900),'puzzle-card');
- assert.equal(E.drawItemCard(1099),'puzzle-card');
- assert.equal(E.drawItemCard(1100),'hint-card');
- assert.equal(E.drawItemCard(1169),'hint-card');
- assert.equal(E.drawItemCard(1170),'stockings-card');
- assert.equal(E.drawItemCard(1199),'stockings-card');
- assert.equal(E.drawItemCard(1200),'clown-card');
- assert.equal(E.drawItemCard(1249),'clown-card');
- assert.equal(E.drawItemCard(1250),'friendship-card');
- assert.equal(E.drawItemCard(1319),'friendship-card');
- assert.equal(E.drawItemCard(1320),'unity-card');
- assert.equal(E.drawItemCard(1339),'unity-card');
- assert.equal(E.drawItemCard(1340),'countdown-card');
- assert.equal(E.drawItemCard(1344),'countdown-card');
- assert.equal(E.drawItemCard(1345),'snatch-card');
- assert.equal(E.drawItemCard(1364),'snatch-card');
- assert.equal(E.drawItemCard(1365),'flower-card');
- assert.equal(E.drawItemCard(1464),'flower-card');
- assert.equal(E.drawItemCard(1465),'mind-eye-card');
- assert.equal(E.drawItemCard(1514),'mind-eye-card');
- assert.equal(E.drawItemCard(1515),'time-magic-card');
- assert.equal(E.drawItemCard(1664),'time-magic-card');
- assert.equal(E.drawItemCard(1665),'cyclone-card');
- assert.equal(E.drawItemCard(1814),'cyclone-card');
- assert.equal(E.drawItemCard(1815),'storm-card');
- assert.equal(E.drawItemCard(1864),'storm-card');
- assert.equal(E.drawItemCard(1865),'meteor-card');
- assert.equal(E.drawItemCard(1884),'meteor-card');
- assert.equal(E.drawItemCard(1885),'ground-break-card');
- assert.equal(E.drawItemCard(1984),'ground-break-card');
- assert.equal(E.drawItemCard(1985),'eclipse-book-card');
- assert.equal(E.drawItemCard(2004),'eclipse-book-card');
- assert.equal(E.drawItemCard(2005),'convulsion-card');
- assert.equal(E.drawItemCard(2024),'convulsion-card');
- assert.throws(()=>E.drawItemCard(2025),/抽取/);
+test('item card weights follow the catalogue and include music at weight 50 when configured',()=>{
+ assert.equal(ITEM_CARDS['music-card'].weight,50);
+ let offset=0;
+ const drawable=Object.values(ITEM_CARDS).filter(card=>card.weight>0&&(card.id!=='music-card'||PLAYABLE_MUSIC_TRACKS.length>0));
+ for(const card of drawable){
+   assert.equal(E.drawItemCard(offset),card.id);
+   assert.equal(E.drawItemCard(offset+card.weight-1),card.id);
+   offset+=card.weight;
+ }
+ assert.throws(()=>E.drawItemCard(offset),/抽取/);
+});
+test('music card broadcasts a song, and another use restarts the selection',()=>{
+ const ids=['4998139','4981014','4941629','4992324','4998138','1331144098','29482285'];
+ assert.deepEqual(PLAYABLE_MUSIC_TRACKS.map(track=>track.neteaseId),ids);
+ const r=room(2);setup(r);
+ const first=r.entries[0].itemCards![0];first.cardId='music-card';
+ E.useItemCard(r,'p0',first.instanceId,r.turnId);
+ const original=r.music!;
+ assert(ids.includes(original.trackId));
+ assert.equal(E.view(r,'p1',new Set()).music?.activationId,original.activationId);
+ assert.match(r.chat.at(-1)!.text,/使用了音乐卡/);
+ assert.equal(r.chat.at(-1)?.kind,'item-card');
+ assert.throws(()=>E.useItemCard(r,'p0',first.instanceId,r.turnId),/手牌/);
+ r.entries[0].itemCards!.push({instanceId:'music-again',cardId:'music-card'});
+ E.useItemCard(r,'p0','music-again',r.turnId);
+ assert(ids.includes(r.music!.trackId));
+ assert.notEqual(r.music?.trackId,original.trackId);
+ assert.notEqual(r.music?.activationId,original.activationId);
+});
+test('music card reroll avoids the current song when another is available',()=>{
+ const tracks=[{neteaseId:'11'},{neteaseId:'22'}];
+ assert.deepEqual(musicCandidates(tracks,'11'),[tracks[1]]);
+ assert.deepEqual(musicCandidates([tracks[0]],'11'),[tracks[0]]);
+});
+test('music playback state is shared during a round and cleared at settlement',()=>{
+ const r=room(2);setup(r,false);
+ r.music={activationId:'music-1',trackId:'11'};
+ assert.deepEqual(E.view(r,'p0',new Set()).music,r.music);
+ assert.deepEqual(E.view(r,'p1',new Set()).music,r.music);
+ E.finishRound(r);
+ assert.equal(E.view(r,'p0',new Set()).music,undefined);
 });
 test('book of moon covers only the selected card for three minutes and expires cleanly',()=>{
  const r=room(3);setup(r);

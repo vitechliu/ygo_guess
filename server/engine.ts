@@ -1,12 +1,13 @@
 import { randomUUID, randomInt } from 'node:crypto';
 import type { Card, RoomState, RoomView, Settings, Entry, ItemCardId, Chat, Command } from '../shared/types.js';
 import { ITEM_CARDS } from '../shared/item-cards.js';
+import { PLAYABLE_MUSIC_TRACKS, musicCandidates } from '../shared/music.js';
 import { MASKED_HEROES } from '../shared/masked-heroes.js';
 
 export class GameError extends Error {}
 export function requireGame(value: unknown, message: string): asserts value { if (!value) throw new GameError(message); }
 export const members = (r: RoomState) => r.players.filter(p => !p.left).sort((a,b) => a.seat-b.seat);
-const drawable=Object.values(ITEM_CARDS).filter(card=>card.weight>0);
+const drawable=Object.values(ITEM_CARDS).filter(card=>card.weight>0&&(card.id!=='music-card'||PLAYABLE_MUSIC_TRACKS.length>0));
 const totalWeight=drawable.reduce((sum,card)=>sum+card.weight,0);
 const DISASTER_CARDS:ItemCardId[]=['cyclone-card','storm-card','meteor-card','fireball-card','outer-entity-card','ground-break-card','lightning-card'];
 const DEBUG_CARDS:Card[]=[
@@ -28,7 +29,7 @@ export function debugAction(r:RoomState,command:Extract<Command,{type:'debug'}>)
     return;
   }
   requireGame(r.phase==='guessing','请先进入猜卡阶段');
-  if(command.action==='expire-effects'){r.visualEffects={};return;}
+  if(command.action==='expire-effects'){r.visualEffects={};r.music=undefined;return;}
   if(command.action==='countdown-to-one'){
     requireGame(r.finalCountdown,'终焉倒计时尚未开始');
     r.finalCountdown.remainingTurns=1;
@@ -127,7 +128,7 @@ export function startRound(r: RoomState, pool: Card[] = [], first = false) {
     requireGame(ps.every(p=>p.id===r.hostId||p.ready),'等待所有非房主玩家准备');
   } else requireGame(r.phase==='round-end','当前不能进入下一局');
   if(r.settings.mode==='random') requireGame(new Set(pool.map(c=>c.cid)).size>=ps.length,'精选题库未配置或有效卡牌不足，请配置题库或使用出题模式');
-  r.round++; r.setupId=randomUUID(); r.turnPlayerId=null; r.turnId='';r.visualEffects={};r.finalCountdown=undefined;
+  r.round++; r.setupId=randomUUID(); r.turnPlayerId=null; r.turnId='';r.visualEffects={};r.finalCountdown=undefined;r.music=undefined;
   r.entries=ps.map(p=>({playerId:p.id,submitted:false,status:'playing',attempts:r.settings.attempts,turns:0,points:0,itemCards:[]}));
   if(r.settings.mode==='random') {
     const candidates=[...new Map(pool.map(c=>[c.cid,c])).values()];
@@ -181,6 +182,7 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
   else requireGame(!targetPlayerId,'这张道具卡不需要指定玩家');
   if(card.id==='scanner-card')requireGame(e.card,'本局卡牌尚未设置');
   if(card.id==='countdown-card')requireGame(!r.finalCountdown,'终焉倒计时已经开始');
+  if(card.id==='music-card')requireGame(PLAYABLE_MUSIC_TRACKS.length>0,'音乐曲库尚未配置可播放歌曲');
   e.itemCards!.splice(index,1);
   const name=r.players.find(p=>p.id===id)!.name;
   switch(card.id){
@@ -349,6 +351,13 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
       }
       system(r,name+'使用了天变卡，场上每人获得一张随机灾难卡','item-card');
       break;
+    case 'music-card': {
+      const candidates=musicCandidates(PLAYABLE_MUSIC_TRACKS,r.music?.trackId);
+      const track=candidates[randomInt(candidates.length)];
+      r.music={activationId:randomUUID(),trackId:track.neteaseId};
+      system(r,name+'使用了音乐卡，播放《'+track.title+'》','item-card');
+      break;
+    }
     case 'test-card':system(r,name+'使用了测试卡','item-card');break;
   }
 }
@@ -401,6 +410,7 @@ function advance(r:RoomState) {
 export function finishRound(r:RoomState,early=false) {
   for(const e of r.entries){e.itemCards=[];e.skipNextTurns=0;}
   r.visualEffects={};
+  r.music=undefined;
   r.finalCountdown=undefined;
   if(r.round>0&&!r.history.some(h=>h.round===r.round)) {
     for(const e of r.entries) if(e.status==='playing')e.status='failed';
@@ -432,7 +442,7 @@ export function leave(r:RoomState,id:string,online:Set<string>,removedBy?:'房�
 export function again(r:RoomState) {
   requireGame(r.phase==='match-end','比赛尚未结束');
   r.players=members(r).map((p,i)=>({...p,score:0,ready:false,seat:i}));
-  r.round=0;r.entries=[];r.history=[];r.phase='lobby';r.turnId='';r.setupId='';r.turnPlayerId=null;r.visualEffects={};r.finalCountdown=undefined;
+  r.round=0;r.entries=[];r.history=[];r.phase='lobby';r.turnId='';r.setupId='';r.turnPlayerId=null;r.visualEffects={};r.finalCountdown=undefined;r.music=undefined;
   system(r,'新比赛已创建，请准备');
 }
 export function view(r:RoomState,selfId:string,online:Set<string>,debugEnabled=false):RoomView {
@@ -446,7 +456,7 @@ export function view(r:RoomState,selfId:string,online:Set<string>,debugEnabled=f
       return {...p,name:(r.visualEffects?.clownNames?.[p.id]?.endsAt??0)>Date.now()?'🤡':p.name,online:online.has(p.id),waiting:r.phase!=='lobby'&&(!e||e.status==='left')&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,failedByGuess:e?.failedByGuess??false,
         ...(e?.card&&(reveal||(r.phase==='guessing'&&(!participant||p.id!==selfId||e.status==='solved')))?{card:e.card}:{})};
     }),
-    chat:r.chat.filter(message=>!message.recipientPlayerId||message.recipientPlayerId===selfId),myItemCards:participant?(r.entries[index].itemCards??[]):[],visualEffects:r.visualEffects,reversalActive:participant&&r.turnPlayerId===selfId&&r.entries[index].reversalTurnId===r.turnId,finalCountdownRemainingTurns:r.finalCountdown?.remainingTurns,debugEnabled,
+    chat:r.chat.filter(message=>!message.recipientPlayerId||message.recipientPlayerId===selfId),myItemCards:participant?(r.entries[index].itemCards??[]):[],visualEffects:r.visualEffects,reversalActive:participant&&r.turnPlayerId===selfId&&r.entries[index].reversalTurnId===r.turnId,finalCountdownRemainingTurns:r.finalCountdown?.remainingTurns,debugEnabled,music:r.music,
     ...(r.phase==='setting'&&participant?{nextPlayerName:r.players.find(p=>p.id===next?.playerId)?.name,mySubmittedCard:r.entries[index].submitted?next?.card:undefined}:{}),
     history:participant?r.history.map(result=>({round:result.round,entries:result.entries.map(({itemCards,...entry})=>entry)})):[]};
 }

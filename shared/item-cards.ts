@@ -136,4 +136,8 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
     id: 'convulsion-card', name: '天变卡', category: 'spell', reference: '天变地异',
     image: '/convulsion-item-card.webp', description: '所有玩家随机获得一张灾难卡。', timing: 'own-turn', weight: 20,
   },
+  'music-card': {
+    id: 'music-card', name: '音乐卡', category: 'monster', reference: '多之七音服·丘蒂娅',
+    image: '/music-item-card.webp', description: '随机播放一首游戏王音乐；如果正在播放，就换一首。', timing: 'own-turn', weight: 50,
+  },
 };
