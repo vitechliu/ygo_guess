@@ -3,6 +3,22 @@ import {SqliteStore} from '../server/store.js';import {Hub,parseCommand} from '.
 async function harness(){const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-test-'));const store=new SqliteStore(path.join(dir,'test.sqlite'));const hub=new Hub(store,new FixtureCards(),1);await hub.init();return {dir,store,hub,async close(){await hub.close();await store.close();}};}
 const cmd=(body:any)=>({...body,id:randomUUID()}) as Command;
 async function started(h:Hub){await h.handle(session('a'),cmd({type:'create',settings:{mode:'random',rounds:2,attempts:3}}));const r=h.roomFor('a')!;await h.handle(session('b'),cmd({type:'join',code:r.code}));await h.handle(session('b'),cmd({type:'ready',ready:true}));await h.handle(session('a'),cmd({type:'start'}));return h.roomFor('a')!;}
+test('host skipping their own turn uses the normal notice, while skipping another player is forced',async()=>{
+ const h=await harness();try{
+  let r=await started(h.hub);
+  await h.hub.handle(session('a'),cmd({type:'skip',turnId:r.turnId}));
+  r=h.hub.roomFor('a')!;
+  assert.equal(r.chat.at(-1)?.text,'a 的回合已跳过');
+  assert.equal(r.turnPlayerId,'b');
+  await h.hub.handle(session('a'),cmd({type:'skip',turnId:r.turnId}));
+  r=h.hub.roomFor('a')!;
+  assert.equal(r.chat.at(-1)?.text,'b 的回合已被强制跳过');
+  await h.hub.handle(session('a'),cmd({type:'skip',turnId:r.turnId}));
+  r=h.hub.roomFor('a')!;
+  await h.hub.handle(session('b'),cmd({type:'skip',turnId:r.turnId}));
+  assert.equal(h.hub.roomFor('a')!.chat.at(-1)?.text,'b 的回合已跳过');
+ }finally{await h.close();}
+});
 test('item use is persisted once and rejects forged or stale turns',async()=>{
  const h=await harness();try{
   const r=await started(h.hub);const instance={instanceId:randomUUID(),cardId:'test-card' as const};r.entries[0].itemCards!.push(instance);const turn=r.turnId;

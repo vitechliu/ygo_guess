@@ -134,7 +134,7 @@ export class Hub {
           case 'guess':E.guess(r,session.playerId,card!,c.turnId);break;
           case 'use-item-card':E.useItemCard(r,session.playerId,c.instanceId,c.turnId,c.targetPlayerId,this.onlineFor(r));break;
           case 'give-up':E.giveUp(r,session.playerId,c.turnId);break;
-          case 'skip':E.skip(r,session.playerId,c.turnId,r.hostId===session.playerId||session.admin);break;
+          case 'skip':E.skip(r,session.playerId,c.turnId,r.turnPlayerId!==session.playerId&&(r.hostId===session.playerId||session.admin));break;
           case 'kick':host();E.requireGame(c.playerId!==session.playerId,'房主不能移除自己');E.leave(r,c.playerId,this.online(),'房主');break;
           case 'leave':E.leave(r,session.playerId,this.online());break;
           case 'again':host();E.again(r);r.createdAt=Date.now();break;

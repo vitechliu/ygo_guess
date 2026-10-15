@@ -190,6 +190,7 @@
   },
   "active": "89c3866832bbcb14",
   "lastOpenFiles": [
+    "dist/client/assets/index-C4r4rpL_.js",
     "dist/client/assets/index-BSDSom3d.js",
     "dist/client/assets/index-8HxKMm-D.js",
     "dist/client/unity-item-card.webp",
@@ -210,7 +211,6 @@
     "dist/client/assets/index-D8qT-Yfm.css",
     "dist/client/assets/index-DQrfKbwo.js",
     "dist/client/assets/index-BSv22RUx.js",
-    "tests/new-item-cards.e2e.ts",
     "未命名.md"
   ]
 }
