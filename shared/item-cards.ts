@@ -14,11 +14,11 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'prohibition-card': {
     id: 'prohibition-card', name: '禁止卡', category: 'spell', reference: '禁止令',
-    image: '/prohibition-item-card.webp', description: '指定一名其他玩家，跳过他的下一个回合。', timing: 'own-turn', weight: 100,
+    image: '/prohibition-item-card.webp', description: '指定一名其他玩家，跳过他的下一个回合。', timing: 'own-turn', weight: 50,
   },
   'maxx-c-card': {
     id: 'maxx-c-card', name: '增殖卡', category: 'monster', reference: '增殖的G',
-    image: '/maxx-c-item-card.webp', description: '可爱的G爬上所有人的卡牌，持续 3 分钟。', timing: 'own-turn', weight: 20,
+    image: '/maxx-c-item-card.webp', description: '可爱的G爬上所有人的卡牌，持续 3 分钟。', timing: 'own-turn', weight: 50,
   },
   'mask-change-card': {
     id: 'mask-change-card', name: '假面卡', category: 'spell', reference: '假面变化',
@@ -30,11 +30,11 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'lightning-card': {
     id: 'lightning-card', name: '雷击卡', category: 'spell', reference: '雷击',
-    image: '/lightning-item-card.webp', description: '雷电会随机落下，持续 3 分钟。', timing: 'own-turn', weight: 50,
+    image: '/lightning-item-card.webp', description: '雷电会随机落下，持续 3 分钟。', timing: 'own-turn', weight: 80,
   },
   'fireball-card': {
     id: 'fireball-card', name: '火球卡', category: 'spell', reference: '火球',
-    image: '/fireball-item-card.webp', description: '指定一名其他玩家的卡牌，燃烧吧！持续 3 分钟。', timing: 'own-turn', weight: 150,
+    image: '/fireball-item-card.webp', description: '让一名其他玩家的卡牌燃烧！持续 3 分钟。', timing: 'own-turn', weight: 150,
   },
   'outer-entity-card': {
     id: 'outer-entity-card', name: '外神卡', category: 'xyz', reference: '外神 奈亚拉',
@@ -42,11 +42,11 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'god-rage-card': {
     id: 'god-rage-card', name: '神愤卡', category: 'xyz', reference: 'No.69 纹章神 盾徽-神之愤怒',
-    image: '/god-rage-item-card.webp', description: '指定一名其他玩家，遮住他卡牌上的名字，直到这一小局结束。', timing: 'own-turn', weight: 50,
+    image: '/god-rage-item-card.webp', description: '指定一名其他玩家，抹除他的卡名，直到这一小局结束。', timing: 'own-turn', weight: 50,
   },
   'crossout-card': {
     id: 'crossout-card', name: '指名卡', category: 'spell', reference: '抹杀的指名者',
-    image: '/crossout-item-card.webp', description: '宣布一个词或概念，这局游戏里大家提问时都不能提及。', timing: 'own-turn', weight: 20,
+    image: '/crossout-item-card.webp', description: '宣布一个词或概念，这局游戏里大家提问时都不能提及。', timing: 'own-turn', weight: 40,
   },
   'scanner-card': {
     id: 'scanner-card', name: '扫描卡', category: 'spell', reference: '卡片扫描者',
@@ -134,6 +134,6 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'convulsion-card': {
     id: 'convulsion-card', name: '天变卡', category: 'spell', reference: '天变地异',
-    image: '/convulsion-item-card.webp', description: '所有玩家随机获得一张灾难卡，留到各自回合使用。', timing: 'own-turn', weight: 20,
+    image: '/convulsion-item-card.webp', description: '所有玩家随机获得一张灾难卡。', timing: 'own-turn', weight: 20,
   },
 };
