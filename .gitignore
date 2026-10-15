@@ -38,9 +38,13 @@ yarn-error.log*
 next-env.d.ts
 /dist/
 /.wrangler/
-# Checkout-local execution profile and tool state; never publish them.
+# Checkout-local execution profile and tool state; publish only the project skill below.
 /.sites-runtime/
-/.agents/
+!/.agents/
+/.agents/*
+!/.agents/skills/
+/.agents/skills/*
+!/.agents/skills/ygo-item-cards/
 /.codex/
 /outputs/
 /work/
