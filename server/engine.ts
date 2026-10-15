@@ -3,6 +3,7 @@ import type { Card, RoomState, RoomView, Settings, Entry, ItemCardId, Chat, Comm
 import { ITEM_CARDS } from '../shared/item-cards.js';
 import { PLAYABLE_MUSIC_TRACKS, musicCandidates } from '../shared/music.js';
 import { MASKED_HEROES } from '../shared/masked-heroes.js';
+import { DRAGONMAIDS } from '../shared/dragonmaids.js';
 
 export class GameError extends Error {}
 export function requireGame(value: unknown, message: string): asserts value { if (!value) throw new GameError(message); }
@@ -63,6 +64,10 @@ export function expireVisualEffects(r:RoomState,now=Date.now()) {
   let changed=false;
   if(r.visualEffects.roaches&&r.visualEffects.roaches.endsAt<=now){delete r.visualEffects.roaches;changed=true;}
   if(r.visualEffects.masks&&r.visualEffects.masks.endsAt<=now){delete r.visualEffects.masks;changed=true;}
+  if(r.visualEffects.dragonmaidOutfits){
+    for(const [playerId,effect] of Object.entries(r.visualEffects.dragonmaidOutfits))if(effect.endsAt<=now){delete r.visualEffects.dragonmaidOutfits[playerId];changed=true;}
+    if(!Object.keys(r.visualEffects.dragonmaidOutfits).length)delete r.visualEffects.dragonmaidOutfits;
+  }
   if(r.visualEffects.lightning&&r.visualEffects.lightning.endsAt<=now){delete r.visualEffects.lightning;changed=true;}
   if(r.visualEffects.distortion&&r.visualEffects.distortion.endsAt<=now){delete r.visualEffects.distortion;changed=true;}
   if(r.visualEffects.flowers&&r.visualEffects.flowers.endsAt<=now){delete r.visualEffects.flowers;changed=true;}
@@ -176,7 +181,7 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
   else if(card.id==='snatch-card')requireGame(target&&target.playerId!==id&&target.status==='playing'&&target.attempts>=2&&members(r).some(p=>p.id===targetPlayerId),'请选择至少还有 2 次猜测机会的其他玩家');
   else if(card.id==='clown-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&members(r).some(p=>p.id===targetPlayerId),'请选择本局的其他玩家');
   else if(card.id==='fireball-card'||card.id==='god-rage-card'||card.id==='moon-book-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&target.card&&members(r).some(p=>p.id===targetPlayerId),'请选择场上有卡牌的其他玩家');
-  else if(card.id==='cyclone-card')requireGame(target&&target.status!=='left'&&target.card&&members(r).some(p=>p.id===targetPlayerId),'请选择场上有卡牌的玩家');
+  else if(card.id==='cyclone-card'||card.id==='changeover-card')requireGame(target&&target.status!=='left'&&target.card&&members(r).some(p=>p.id===targetPlayerId),'请选择场上有卡牌的玩家');
   else if(card.id==='reborn-card')requireGame(target&&target.playerId!==id&&target.status==='failed'&&target.failedByGuess&&target.attempts===0&&members(r).some(p=>p.id===targetPlayerId)&&online.has(targetPlayerId!),'请选择在线且因猜测次数用完而失败的其他玩家');
   else if(card.id==='hint-card'||card.id==='ecole-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&members(r).some(p=>p.id===targetPlayerId)&&online.has(targetPlayerId!),'请选择在线的其他玩家');
   else requireGame(!targetPlayerId,'这张道具卡不需要指定玩家');
@@ -202,6 +207,14 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
       r.visualEffects??={};
       r.visualEffects.masks={id:randomUUID(),endsAt:Date.now()+60000,appearances};
       system(r,name+'使用了假面卡，场上的卡牌换上了假面英雄外观（1 分钟）','item-card');
+      break;
+    }
+    case 'changeover-card': {
+      const appearance=DRAGONMAIDS[randomInt(DRAGONMAIDS.length)];
+      r.visualEffects??={};
+      r.visualEffects.dragonmaidOutfits??={};
+      r.visualEffects.dragonmaidOutfits[target!.playerId]={id:randomUUID(),endsAt:Date.now()+60000,appearance};
+      system(r,name+'对 '+r.players.find(p=>p.id===targetPlayerId)!.name+' 使用了更衣卡，其卡牌变成了 '+appearance.name+'（1 分钟）','item-card');
       break;
     }
     case 'chance-card':
@@ -256,6 +269,9 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
       break;
     case 'puzzle-card':
       system(r,name+'使用了谜题卡：本回合可额外问 1 个问题，请大家口头遵守','item-card');
+      break;
+    case 'combo-card':
+      system(r,name+'使用了连击卡：下次提问时，若所有人都回答“是”，可继续提问，直到有人回答“否”；请大家口头遵守','item-card');
       break;
     case 'hint-card':
       system(r,name+'对 '+r.players.find(p=>p.id===targetPlayerId)!.name+' 使用了提示卡，请对方给出 1 个提示','item-card');

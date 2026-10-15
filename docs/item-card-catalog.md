@@ -9,6 +9,7 @@
 | 禁止卡 | [Prohibition](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=4968&ope=2&request_locale=en)（禁止令） | 待上线 | 自己回合指定一名仍在本局行动的其他玩家，跳过其下次回合。 | 权重 100；卡牌 ID：`prohibition-card`；可叠加，多次跳过依次生效；被跳过的回合不计入其得分用的个人回合数。 |
 | 增殖卡 | [Maxx "C"](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=9455&ope=2&request_locale=en)（增殖的G） | 待上线 | 自己回合使用后，所有玩家卡图出现会随机变换位置的可爱卡通蟑螂，持续 3 分钟。 | 权重 20；卡牌 ID：`maxx-c-card`；再次使用会刷新持续时间；本局结算时效果结束。 |
 | 假面卡 | [Mask Change](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=9066&ope=2&request_locale=en)（假面变化） | 待上线 | 自己回合使用后，场上每张卡获得不同的随机假面英雄外观，持续 1 分钟，真实答案和猜测规则不变。 | 权重 50；卡牌 ID：`mask-change-card`；再次使用会重新随机并刷新持续时间；本局结算时效果结束。 |
+| 更衣卡 | [半龙女仆的更衣](https://ygocdb.com/card/40110009)（魔法卡） | 待上线 | 指定场上一名玩家（可选自己），其卡牌变成随机半龙女仆怪兽外观，持续 1 分钟。 | 权重 100；ID：`changeover-card`；仅改变外观；同一目标重复使用会重新随机并刷新时间；与假面卡同时生效时优先显示更衣外观；卡图取来源卡插画区域并本地压缩。 |
 | 机会卡 | 第二次机会 | 待上线 | 自己回合使用，本局剩余猜测机会 +1。 | 权重 150；卡牌 ID：`chance-card`；绿色魔法卡外框。 |
 | 雷击卡 | 雷击 | 待上线 | 页面随机出现雷电，持续 3 分钟。 | 权重 50；卡牌 ID：`lightning-card`；纯视觉，重复使用刷新时间。 |
 | 火球卡 | 火球 | 待上线 | 指定场上一名其他玩家的卡图，附加燃烧特效 3 分钟。 | 权重 150；卡牌 ID：`fireball-card`；纯视觉，同一目标再次使用刷新时间。 |
@@ -21,6 +22,7 @@
 | 虚无卡 | [虚无空间](https://ygocdb.com/card/5851097) | 待上线 | 公告本小局提问不可提及“特殊召唤”。 | 权重 30；ID：`void-card`；仅系统消息，由玩家口头遵守，不自动拦截。 |
 | 逆转卡 | [大逆转谜题](https://ygocdb.com/card/5990062) | 待上线 | 本回合可问 5 个问题；猜错或跳过则立即用完本局机会。 | 权重 30；ID：`reversal-card`；问答次数仅系统消息提醒；猜中照常得分。 |
 | 谜题卡 | [谜题](https://ygocdb.com/card/38723936) | 待上线 | 公告本回合可额外问 1 个问题。 | 权重 200；ID：`puzzle-card`；仅口头遵守，不自动计数。 |
+| 连击卡 | [连击的帝王](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=11204&ope=2&request_locale=cn)（永续陷阱） | 待上线 | 下次提问时，若所有人都回答“是”，可以继续提问，直到有人回答“否”。 | 权重 60；ID：`combo-card`；仅口头遵守，不自动判定回答；卡图取来源卡插画区域并本地压缩。 |
 | 提示卡 | [杀手级调整曲·提示员](https://ygocdb.com/card/16387555) | 待上线 | 指定一名其他在线玩家，请他给自己一个提示。 | 权重 70；ID：`hint-card`；只发系统消息，不输入或验证提示。 |
 | 丝袜卡 | [效果遮蒙者](https://ygocdb.com/card/97268402) | 待上线 | 公告请场上玩家回答“场上有多少对丝袜？” | 权重 30；ID：`stockings-card`；卡图聚焦来源角色的黑色丝袜部分；仅口头遵守。 |
 | 小丑卡 | [娱乐法师 戏法小丑](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=11802&ope=2) | 待上线 | 指定一名其他玩家，将其显示昵称临时改为 🤡，持续 5 分钟。 | 权重 50；ID：`clown-card`；保留原始身份和昵称，重复使用同一目标刷新时间；本小局结算时恢复。 |

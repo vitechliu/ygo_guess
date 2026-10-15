@@ -82,6 +82,20 @@ test('timed card effects survive storage and are removed by the room timer',asyn
   assert.equal((await h.store.loadRooms()).find(room=>room.code===r.code)?.visualEffects?.masks,undefined);
  }finally{await h.close();}
 });
+test('changeover alone expires through the room timer and storage',async()=>{
+ const h=await harness();try{
+  const r=await started(h.hub);
+  const item={instanceId:randomUUID(),cardId:'changeover-card' as const};
+  r.entries[0].itemCards!.push(item);
+  await h.hub.handle(session('a'),cmd({type:'use-item-card',instanceId:item.instanceId,turnId:r.turnId,targetPlayerId:'a'}));
+  const saved=(await h.store.loadRooms()).find(room=>room.code===r.code)!;
+  assert(saved.visualEffects?.dragonmaidOutfits?.a);
+  h.hub.roomFor('a')!.visualEffects!.dragonmaidOutfits!.a.endsAt=Date.now()-1;
+  await new Promise(resolve=>setTimeout(resolve,1200));
+  assert.equal(h.hub.roomFor('a')!.visualEffects?.dragonmaidOutfits,undefined);
+  assert.equal((await h.store.loadRooms()).find(room=>room.code===r.code)?.visualEffects?.dragonmaidOutfits,undefined);
+ }finally{await h.close();}
+});
 test('only the host can change lobby settings and changed rules require fresh readiness',async()=>{
  const h=await harness();try{
   await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',rounds:2,attempts:3}}));const code=h.hub.roomFor('a')!.code;

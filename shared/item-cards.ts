@@ -24,6 +24,10 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
     id: 'mask-change-card', name: '假面卡', category: 'spell', reference: '假面变化',
     image: '/mask-change-item-card.webp', description: '所有人的卡牌暂时变化变成不同的假面英雄，持续 1 分钟。', timing: 'own-turn', weight: 50,
   },
+  'changeover-card': {
+    id: 'changeover-card', name: '更衣卡', category: 'spell', reference: '半龙女仆的更衣',
+    image: '/changeover-item-card.webp', description: '指定一名玩家，让他的卡牌变成随机半龙女仆怪兽，持续 1 分钟。', timing: 'own-turn', weight: 100,
+  },
   'chance-card': {
     id: 'chance-card', name: '机会卡', category: 'spell', reference: '第二次机会',
     image: '/chance-item-card.webp', description: '你的猜测机会增加 1 次。', timing: 'own-turn', weight: 150,
@@ -71,6 +75,10 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   'puzzle-card': {
     id: 'puzzle-card', name: '谜题卡', category: 'spell', reference: '谜题',
     image: '/puzzle-item-card.webp', description: '这回合你可以额外问 1 个问题。', timing: 'own-turn', weight: 200,
+  },
+  'combo-card': {
+    id: 'combo-card', name: '连击卡', category: 'trap', reference: '连击的帝王',
+    image: '/combo-item-card.webp', description: '你下次提问时，若所有人都回答“是”，就可以继续提问，直到有人回答“否”。', timing: 'own-turn', weight: 60,
   },
   'hint-card': {
     id: 'hint-card', name: '提示卡', category: 'monster', reference: '杀手级调整曲·提示员',

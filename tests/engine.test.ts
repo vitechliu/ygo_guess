@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import * as E from '../server/engine.js';import {cards} from './fixtures.js';
 import { ITEM_CARDS } from '../shared/item-cards.js';
+import { DRAGONMAIDS } from '../shared/dragonmaids.js';
 import { PLAYABLE_MUSIC_TRACKS, musicCandidates } from '../shared/music.js';
 function room(n=3,mode:'custom'|'random'='custom',rounds=3,attempts=3){const r=E.createRoom('ABCDEF','p0','p0',{mode,rounds,attempts});for(let i=1;i<n;i++)E.join(r,'p'+i,'p'+i);r.players.forEach(p=>p.ready=true);return r;}
 function setup(r:ReturnType<typeof room>,withTestCards=true){E.startRound(r,[],true);for(let i=0;i<r.entries.length;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);if(withTestCards&&r.settings.itemCards!==false)for(const e of r.entries)e.itemCards!.push({instanceId:'test-'+e.playerId,cardId:'test-card'});}
@@ -231,6 +232,22 @@ test('crossout only announces a verbal rule and does not change guessing validat
  E.guess(r,'p0',cards[0],r.turnId);
  assert.equal(r.entries[0].attempts,2);
 });
+test('combo card has weight 60 and only announces the verbal question chain',()=>{
+ const r=room(2);setup(r);
+ const item=r.entries[0].itemCards![0];item.cardId='combo-card';
+ assert.equal(ITEM_CARDS['combo-card'].weight,60);
+ const turnId=r.turnId;
+ const attempts=r.entries[0].attempts;
+ E.useItemCard(r,'p0',item.instanceId,turnId);
+ assert.equal(r.entries[0].itemCards!.length,0);
+ assert.equal(r.turnId,turnId);
+ assert.equal(r.entries[0].attempts,attempts);
+ assert.equal(r.chat.at(-1)?.kind,'item-card');
+ assert.match(r.chat.at(-1)!.text,/下次提问.*所有人都回答“是”.*继续提问.*回答“否”/);
+ assert(E.view(r,'p1',new Set()).chat.some(message=>message.text.includes('连击卡')));
+ E.guess(r,'p0',cards[0],turnId);
+ assert.equal(r.entries[0].attempts,attempts-1);
+});
 test('prohibition skips the selected player next turn without counting a turn',()=>{
  const r=room(3);setup(r);
  const first=r.entries[0].itemCards![0];first.cardId='prohibition-card';
@@ -276,6 +293,35 @@ test('timed visual effects preserve answers and mask each player differently',()
  assert(E.view(r,'p0',new Set()).visualEffects?.masks?.appearances.p0);
  E.expireVisualEffects(r,Date.now()+180001);
  assert.equal(r.visualEffects?.roaches,undefined);assert.equal(r.visualEffects?.masks,undefined);
+});
+test('changeover targets one card, preserves answers, refreshes and expires separately from masks',()=>{
+ const r=room(3);setup(r);
+ const answerIds=r.entries.map(e=>e.card?.cid);
+ const item=r.entries[0].itemCards![0];item.cardId='changeover-card';
+ assert.equal(ITEM_CARDS['changeover-card'].weight,100);
+ assert.throws(()=>E.useItemCard(r,'p0',item.instanceId,r.turnId),/请选择场上有卡牌的玩家/);
+ assert.throws(()=>E.useItemCard(r,'p0',item.instanceId,r.turnId,'missing'),/请选择场上有卡牌的玩家/);
+ E.useItemCard(r,'p0',item.instanceId,r.turnId,'p0');
+ const first=r.visualEffects!.dragonmaidOutfits!.p0;
+ assert(DRAGONMAIDS.some(maid=>maid.id===first.appearance.id));
+ assert(first.endsAt>Date.now()+59000);
+ assert.equal(Object.keys(r.visualEffects!.dragonmaidOutfits!).length,1);
+ assert.equal(E.view(r,'p0',new Set()).players[0].card,undefined);
+ assert.equal(E.view(r,'p1',new Set()).visualEffects?.dragonmaidOutfits?.p0.appearance.id,first.appearance.id);
+ assert.equal(r.chat.at(-1)?.kind,'item-card');
+ assert.deepEqual(r.entries.map(e=>e.card?.cid),answerIds);
+ const mask={instanceId:'mask',cardId:'mask-change-card' as const};r.entries[0].itemCards!.push(mask);
+ E.useItemCard(r,'p0',mask.instanceId,r.turnId);
+ r.visualEffects!.masks!.endsAt=Date.now()+120000;
+ const second={instanceId:'changeover-again',cardId:'changeover-card' as const};r.entries[0].itemCards!.push(second);
+ E.useItemCard(r,'p0',second.instanceId,r.turnId,'p0');
+ assert.notEqual(r.visualEffects?.dragonmaidOutfits?.p0.id,first.id);
+ E.expireVisualEffects(r,Date.now()+60001);
+ assert.equal(r.visualEffects?.dragonmaidOutfits,undefined);
+ assert(r.visualEffects?.masks);
+ assert.deepEqual(r.entries.map(e=>e.card?.cid),answerIds);
+ E.finishRound(r);
+ assert.deepEqual(r.visualEffects,{});
 });
 test('disabled item cards never enter the hand',()=>{
  const r=room(2);r.settings.itemCards=false;setup(r);

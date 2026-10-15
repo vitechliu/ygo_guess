@@ -199,7 +199,7 @@ export class Hub {
   }
   private async expireVisualEffects(){
     for(const old of this.rooms.values()){
-      if(!old.visualEffects?.roaches&&!old.visualEffects?.masks&&!old.visualEffects?.lightning&&!old.visualEffects?.distortion&&!old.visualEffects?.fireballs&&!old.visualEffects?.faceDown&&!old.visualEffects?.clownNames)continue;
+      if(!old.visualEffects?.roaches&&!old.visualEffects?.masks&&!old.visualEffects?.dragonmaidOutfits&&!old.visualEffects?.lightning&&!old.visualEffects?.distortion&&!old.visualEffects?.fireballs&&!old.visualEffects?.faceDown&&!old.visualEffects?.clownNames)continue;
       const r=structuredClone(old);
       if(!E.expireVisualEffects(r))continue;
       r.version++;
