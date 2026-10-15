@@ -10,8 +10,8 @@ const drawable=Object.values(ITEM_CARDS).filter(card=>card.weight>0);
 const totalWeight=drawable.reduce((sum,card)=>sum+card.weight,0);
 const DISASTER_CARDS:ItemCardId[]=['cyclone-card','storm-card','meteor-card','fireball-card','outer-entity-card','ground-break-card','lightning-card'];
 const DEBUG_CARDS:Card[]=[
-  {id:900000001,cid:900000001,name:'调试小龙',types:'调试卡',description:'本地道具卡测试用。',image:'/test-item-card.webp'},
-  {id:900000002,cid:900000002,name:'调试魔法使',types:'调试卡',description:'本地道具卡测试用。',image:'/prohibition-item-card.webp'},
+  {id:89631139,cid:4007,name:'青眼白龙',types:'[怪兽|通常] 龙/光\n[★8] 3000/2500',description:'以高攻击力著称的传说之龙。任何对手都能粉碎，其破坏力不可估量。',image:'/debug-blue-eyes-card.webp'},
+  {id:46986414,cid:4041,name:'黑魔术师',types:'[怪兽|通常] 魔法师/暗\n[★7] 2500/2100',description:'作为魔法师，攻击力·守备力都是最高级别。',image:'/debug-dark-magician-card.webp'},
 ];
 export function drawItemCard(roll=randomInt(totalWeight)):ItemCardId {
   requireGame(Number.isInteger(roll)&&roll>=0&&roll<totalWeight,'道具卡抽取数值无效');
@@ -322,7 +322,7 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
       requireGame(candidates.length>0,'场上没有可选的卡牌');
       const hit=candidates[randomInt(candidates.length)];
       r.visualEffects??={};r.visualEffects.meteors??={};
-      r.visualEffects.meteors[hit.playerId]={id:randomUUID(),endsAt:Date.now()+4500};
+      r.visualEffects.meteors[hit.playerId]={id:randomUUID(),endsAt:Date.now()+9000};
       system(r,name+'使用了陨石卡，陨石落在 '+r.players.find(player=>player.id===hit.playerId)!.name+' 的卡牌上','item-card');
       break;
     }

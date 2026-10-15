@@ -114,7 +114,7 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'cyclone-card': {
     id: 'cyclone-card', name: '旋风卡', category: 'spell', reference: '旋风',
-    image: '/cyclone-item-card.webp', description: '指定场上一张卡牌，让它原地翻转几秒。', timing: 'own-turn', weight: 150,
+    image: '/cyclone-item-card.webp', description: '指定场上一张卡牌，旋风会绕着它盘旋并让它翻转几秒。', timing: 'own-turn', weight: 150,
   },
   'storm-card': {
     id: 'storm-card', name: '风暴卡', category: 'spell', reference: '大风暴',

@@ -69,6 +69,9 @@ test('flower, flip, meteor and crack effects target and expire',()=>{
   assert(r.visualEffects?.storm);
   use(r,'meteor-card');
   assert.equal(Object.keys(r.visualEffects?.meteors??{}).length,1);
+  const meteor=r.visualEffects?.meteors?.[Object.keys(r.visualEffects.meteors)[0]];
+  assert(meteor);
+  assert(meteor.endsAt-Date.now()>8500);
   r.entries[1].attempts=1;r.entries[2].attempts=2;
   use(r,'ground-break-card');
   assert(r.visualEffects?.cracks?.p1);
@@ -78,6 +81,16 @@ test('flower, flip, meteor and crack effects target and expire',()=>{
   assert.equal(r.visualEffects?.cyclones,undefined);
   assert.equal(r.visualEffects?.meteors,undefined);
   assert.equal(r.visualEffects?.cracks,undefined);
+});
+
+test('meteor crater remains until its nine-second effect expires',()=>{
+  const r=room();
+  use(r,'meteor-card');
+  const meteor=Object.values(r.visualEffects?.meteors??{})[0];
+  assert(meteor);
+  assert.equal(E.expireVisualEffects(r,meteor.endsAt-1),false);
+  assert.equal(E.expireVisualEffects(r,meteor.endsAt),true);
+  assert.equal(r.visualEffects?.meteors,undefined);
 });
 
 test('eclipse book covers every card and convulsion grants one allowed disaster per player',()=>{

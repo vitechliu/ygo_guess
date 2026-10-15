@@ -59,3 +59,4 @@ next-env.d.ts
 .obsidian/workspace.json
 /.obsidian
 design.md
+/docs/reports
