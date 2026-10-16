@@ -9,7 +9,7 @@ import {api,type User,type Send,type Action} from './game';
 export function Home({user,setUser,send,connected}:{user:User|null;setUser:(u:User)=>void;send:Send;connected:boolean}){
  const initialCode=new URLSearchParams(location.search).get('room')??'';
  const [tab,setTab]=useState(initialCode?'join':'create'),[name,setName]=useState(user?.name??''),[code,setCode]=useState(initialCode.toUpperCase());
- const [settings,setSettings]=useState<Settings>({mode:'custom',rounds:3,attempts:3,itemCards:true}),[busy,setBusy]=useState(false),[pendingAction,setPendingAction]=useState<Action|null>(null);
+ const [settings,setSettings]=useState<Settings>({mode:'custom',attempts:3,itemCards:true}),[busy,setBusy]=useState(false),[pendingAction,setPendingAction]=useState<Action|null>(null);
  useEffect(()=>{if(!pendingAction||!connected)return;setPendingAction(null);send(pendingAction).catch(()=>{}).finally(()=>setBusy(false));},[connected,pendingAction,send]);
  const submit=async(e:React.FormEvent)=>{
   e.preventDefault();if(busy)return;setBusy(true);
@@ -23,7 +23,7 @@ export function Home({user,setUser,send,connected}:{user:User|null;setUser:(u:Us
  <label className={'mode-option '+(settings.mode==='custom'?'selected':'')}><RadioGroupItem value="custom" id="mode-custom"/><div className="mode-icon"><Users size={22}/></div><div><strong>好友出题</strong><p>每个人为下家挑选一张卡</p></div><span className="mode-tag">推荐</span></label>
  <label className={'mode-option '+(settings.mode==='random'?'selected':'')}><RadioGroupItem value="random" id="mode-random"/><div className="mode-icon"><Shuffle size={22}/></div><div><strong>随机分配</strong><p>从精选题库中抽取卡牌</p></div></label></RadioGroup>
  {settings.mode==='random'&&<p className="hint">从精选题库随机分配卡牌，同局不会重复。</p>}
- <div className="number-fields"><label>比赛局数<div className="number-wrap"><input aria-label="比赛局数" type="number" min={1} max={20} value={settings.rounds} onChange={e=>setSettings(s=>({...s,rounds:Number(e.target.value)}))}/><span>局</span></div></label><label>每局猜测机会<div className="number-wrap"><input aria-label="每局猜测机会" type="number" min={1} max={10} value={settings.attempts} onChange={e=>setSettings(s=>({...s,attempts:Number(e.target.value)}))}/><span>次 / 人</span></div></label></div></TabsContent>
+ <div className="number-fields"><label>每局猜测机会<div className="number-wrap"><input aria-label="每局猜测机会" type="number" min={1} max={10} value={settings.attempts} onChange={e=>setSettings(s=>({...s,attempts:Number(e.target.value)}))}/><span>次 / 人</span></div></label></div></TabsContent>
  <TabsContent value="join"><label className="field-label" htmlFor="room-code">房间码</label><input id="room-code" className="text-input room-code-input" placeholder="输入6位房间码" value={code} maxLength={6} minLength={6} required={tab==='join'} onChange={e=>setCode(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g,''))}/><p className="hint">已经开赛的房间也可以加入，你将从下一局开始参赛。</p></TabsContent>
  <Button className="primary full start-button" type="submit" disabled={busy||!name.trim()}>{busy?<Loader2 className="spin" size={18}/>:tab==='create'?<Plus size={18}/>:<ArrowRight size={18}/>} {tab==='create'?'创建房间，邀请朋友':'加入牌桌'}<ArrowRight size={18} className="button-arrow"/></Button><p className="form-footnote"><Users size={14}/>2–10 人 <span>·</span> 无需注册 <span>·</span> 回合不限时</p>
  </form></Tabs></section>

@@ -5,7 +5,7 @@ import { cards } from './fixtures.js';
 import type { ItemCardId, RoomState } from '../shared/types.js';
 
 function room(attempts=3): RoomState {
-  const r=E.createRoom('ABCDEF','p0','p0',{mode:'custom',rounds:2,attempts,itemCards:true});
+  const r=E.createRoom('ABCDEF','p0','p0',{mode:'custom',attempts,itemCards:true});
   E.join(r,'p1','p1');
   E.join(r,'p2','p2');
   r.players.forEach(player=>player.ready=true);

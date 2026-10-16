@@ -11,6 +11,7 @@ export const members = (r: RoomState) => r.players.filter(p => !p.left).sort((a,
 const drawable=Object.values(ITEM_CARDS).filter(card=>card.weight>0&&(card.id!=='music-card'||PLAYABLE_MUSIC_TRACKS.length>0));
 const totalWeight=drawable.reduce((sum,card)=>sum+card.weight,0);
 const DISASTER_CARDS:ItemCardId[]=['cyclone-card','storm-card','meteor-card','fireball-card','outer-entity-card','ground-break-card','lightning-card'];
+const RECENT_ROUND_LIMIT=20;
 const DEBUG_CARDS:Card[]=[
   {id:89631139,cid:4007,name:'青眼白龙',types:'[怪兽|通常] 龙/光\n[★8] 3000/2500',description:'以高攻击力著称的传说之龙。任何对手都能粉碎，其破坏力不可估量。',image:'/debug-blue-eyes-card.webp'},
   {id:46986414,cid:4041,name:'黑魔术师',types:'[怪兽|通常] 魔法师/暗\n[★7] 2500/2100',description:'作为魔法师，攻击力·守备力都是最高级别。',image:'/debug-dark-magician-card.webp'},
@@ -108,10 +109,10 @@ export function join(r: RoomState, id: string, name: string) {
 }
 export function updateSettings(r:RoomState,settings:Settings) {
   requireGame(r.phase==='lobby','比赛开始后不能修改设置');
-  if(r.settings.mode===settings.mode&&r.settings.rounds===settings.rounds&&r.settings.attempts===settings.attempts&&(r.settings.itemCards??true)===(settings.itemCards??true))return;
+  if(r.settings.mode===settings.mode&&r.settings.attempts===settings.attempts&&(r.settings.itemCards??true)===(settings.itemCards??true))return;
   r.settings=settings;
   for(const p of members(r))if(p.id!==r.hostId)p.ready=false;
-  system(r,'房主修改了规则：'+(settings.mode==='custom'?'好友出题':'随机分配')+' · '+settings.rounds+' 局 · 每局 '+settings.attempts+' 次猜测 · 道具卡'+(settings.itemCards===false?'关闭':'开启')+'。请重新准备');
+  system(r,'房主修改了规则：'+(settings.mode==='custom'?'好友出题':'随机分配')+' · 每局 '+settings.attempts+' 次猜测 · 道具卡'+(settings.itemCards===false?'关闭':'开启')+'。请重新准备');
 }
 export function shuffleSeats(r:RoomState) {
   requireGame(r.phase==='lobby','比赛开始后不能打乱顺序');
@@ -436,10 +437,11 @@ export function finishRound(r:RoomState,early=false) {
   if(r.round>0&&!r.history.some(h=>h.round===r.round)) {
     for(const e of r.entries) if(e.status==='playing')e.status='failed';
     r.history.push({round:r.round,entries:structuredClone(r.entries)});
+    r.history=r.history.slice(-RECENT_ROUND_LIMIT);
   }
   r.turnPlayerId=null; r.turnId='';
-  r.phase=early||r.round>=r.settings.rounds?'match-end':'round-end';
-  system(r,r.phase==='match-end'?'比赛结束，查看总排行榜':'本局结束，等待房主开始下一局');
+  r.phase='round-end';
+  system(r,early?'本局提前结束，等待房主开始下一局':'本局结束，等待房主开始下一局');
 }
 export function leave(r:RoomState,id:string,online:Set<string>,removedBy?:'房主'|'管理员') {
   const p=r.players.find(p=>p.id===id&&!p.left);
@@ -459,13 +461,7 @@ export function leave(r:RoomState,id:string,online:Set<string>,removedBy?:'房�
   } else if(r.phase==='guessing') {
     if(r.entries.filter(entry=>remaining.some(p=>p.id===entry.playerId)).length<2)finishRound(r,true);
     else if(r.turnPlayerId===id)advance(r);
-  } else if(r.phase==='round-end'&&remaining.length<2)r.phase='match-end';
-}
-export function again(r:RoomState) {
-  requireGame(r.phase==='match-end','比赛尚未结束');
-  r.players=members(r).map((p,i)=>({...p,score:0,ready:false,seat:i}));
-  r.round=0;r.entries=[];r.history=[];r.phase='lobby';r.turnId='';r.setupId='';r.turnPlayerId=null;r.visualEffects={};r.finalCountdown=undefined;r.music=undefined;r.drawing=undefined;
-  system(r,'新比赛已创建，请准备');
+  }
 }
 export function view(r:RoomState,selfId:string,online:Set<string>,debugEnabled=false):RoomView {
   const index=r.entries.findIndex(e=>e.playerId===selfId);

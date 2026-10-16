@@ -24,7 +24,7 @@ try{
  await mkdir('test-results',{recursive:true});
  const a=await newPage(),b=await newPage(),c=await newPage(true);
  await a.goto(base);await a.getByRole('heading',{name:'入座，开一局。'}).waitFor();assert.equal(await a.getByLabel('游戏版本 '+gameVersion).innerText(),'v'+gameVersion);await a.screenshot({path:'test-results/home-desktop.png',fullPage:true});
- await a.getByLabel('你的昵称').fill('游星');await a.getByLabel('比赛局数').fill('2');await a.getByLabel('每局猜测机会').fill('1');await a.getByRole('button',{name:'创建房间，邀请朋友'}).click();
+ await a.getByLabel('你的昵称').fill('游星');await a.getByLabel('每局猜测机会').fill('1');await a.getByRole('button',{name:'创建房间，邀请朋友'}).click();
  await a.locator('.code-copy').waitFor();const code=(await a.locator('.code-copy').innerText()).trim();
  assert(await a.getByRole('button',{name:'开始游戏',exact:true}).isDisabled());assert(await a.getByRole('button',{name:'打乱顺序'}).isDisabled());
  await b.goto(base+'/?room='+code);await b.getByLabel('你的昵称').fill('游戏');await b.getByRole('button',{name:'加入牌桌',exact:true}).click();await b.getByRole('button',{name:'我准备好了'}).waitFor();
@@ -33,10 +33,10 @@ try{
  await b.getByLabel('聊天消息').fill('准备好了吗？');await b.getByRole('button',{name:'发送消息'}).click();await a.getByRole('log').getByText('准备好了吗？',{exact:true}).waitFor();
  await b.getByRole('button',{name:'我准备好了'}).click();await waitFor(()=>snapshots.get(a)?.players.some(p=>p.name==='游戏'&&p.ready)??false,'ready');
  assert.equal(await b.getByRole('button',{name:'保存设置'}).count(),0);
- await a.getByRole('radio',{name:'随机分配'}).check();await a.getByLabel('房间比赛局数').fill('3');await a.getByLabel('房间每局猜测机会').fill('2');await a.getByRole('button',{name:'保存设置'}).click();
- await waitFor(()=>snapshots.get(b)?.settings.mode==='random'&&snapshots.get(b)?.settings.rounds===3&&!snapshots.get(b)?.players.find(p=>p.name==='游戏')?.ready,'lobby settings update');
+ await a.getByRole('radio',{name:'随机分配'}).check();await a.getByLabel('房间每局猜测机会').fill('2');await a.getByRole('button',{name:'保存设置'}).click();
+ await waitFor(()=>snapshots.get(b)?.settings.mode==='random'&&!snapshots.get(b)?.players.find(p=>p.name==='游戏')?.ready,'lobby settings update');
  assert(await a.getByRole('button',{name:'开始游戏',exact:true}).isDisabled());assert(await a.getByRole('button',{name:'打乱顺序'}).isEnabled());
- await a.getByRole('radio',{name:'好友出题'}).check();await a.getByLabel('房间比赛局数').fill('2');await a.getByLabel('房间每局猜测机会').fill('1');await a.getByRole('button',{name:'保存设置'}).click();
+ await a.getByRole('radio',{name:'好友出题'}).check();await a.getByLabel('房间每局猜测机会').fill('1');await a.getByRole('button',{name:'保存设置'}).click();
  await waitFor(()=>snapshots.get(b)?.settings.mode==='custom'&&snapshots.get(b)?.settings.attempts===1,'restored lobby settings');
  await b.getByRole('button',{name:'我准备好了'}).click();await waitFor(()=>snapshots.get(a)?.players.some(p=>p.name==='游戏'&&p.ready)??false,'ready after settings update');
  assert.equal(await b.getByRole('button',{name:'打乱顺序'}).count(),0);
@@ -75,7 +75,7 @@ try{
  await pick(b,targets[0].name,'提交猜测');await waitFor(()=>snapshots.get(c)?.turnPlayerId===snapshots.get(c)?.selfId,'c turn');await pick(c,targets[1].name,'提交猜测');await waitFor(()=>snapshots.get(a)?.turnPlayerId===snapshots.get(a)?.selfId,'a final turn');
  await a.getByRole('button',{name:'放弃本局'}).click();await a.getByRole('button',{name:'取消',exact:true}).click();assert.equal(snapshots.get(a)!.turnPlayerId,snapshots.get(a)!.selfId);
  await a.getByRole('button',{name:'放弃本局'}).click();await a.getByRole('button',{name:'确认',exact:true}).click();
- await a.getByText('总积分排行榜',{exact:true}).waitFor();assert.equal(snapshots.get(a)!.phase,'match-end');assert.equal(snapshots.get(a)!.players.find(p=>p.name==='游星')!.status,'failed');assert.equal(snapshots.get(a)!.players.find(p=>p.name==='游星')!.attempts,0);assert(await a.getByRole('log').getByText('游星 放弃了本局猜题，剩余猜测机会已清零').count()>0);assert.equal(snapshots.get(a)!.players.find(p=>p.name==='游戏')!.score,2000);check('second round seating, rotated starter, mobile search, confirmed give-up and ranking');
+ await a.getByText('累计积分排行榜',{exact:true}).waitFor();assert.equal(snapshots.get(a)!.phase,'round-end');assert.equal(snapshots.get(a)!.players.find(p=>p.name==='游星')!.status,'failed');assert.equal(snapshots.get(a)!.players.find(p=>p.name==='游星')!.attempts,0);assert(await a.getByRole('log').getByText('游星 放弃了本局猜题，剩余猜测机会已清零').count()>0);assert.equal(snapshots.get(a)!.players.find(p=>p.name==='游戏')!.score,2000);check('second round seating, rotated starter, mobile search, confirmed give-up and ranking');
  const admin=await newPage();await admin.goto(base+'/admin/entry?key=e2e-local-only');await admin.getByRole('heading',{name:'房间管理',exact:true}).waitFor();assert.equal(new URL(admin.url()).pathname,'/admin');assert.equal(new URL(admin.url()).search,'');assert.equal(await admin.locator('.card-image-button').count(),0);
  await admin.getByRole('button',{name:'解散房间',exact:true}).click();await admin.getByRole('button',{name:'确认',exact:true}).click();await a.getByRole('heading',{name:'入座，开一局。'}).waitFor();check('admin exchange strips secret, management view hides answers, room dissolution');
  await c.goto(base);await c.getByRole('heading',{name:'入座，开一局。'}).waitFor();await overflow(c);await c.screenshot({path:'test-results/home-mobile.png',fullPage:true});

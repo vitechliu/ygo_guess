@@ -7,7 +7,7 @@ import type { Store } from '../server/store.js';
 import { FixtureCards } from './fixtures.js';
 import type { Command, RoomState, Session } from '../shared/types.js';
 
-function makeRoom(){return E.createRoom('ABCDEF','host','房主',{mode:'custom',rounds:2,attempts:3,itemCards:false});}
+function makeRoom(){return E.createRoom('ABCDEF','host','房主',{mode:'custom',attempts:3,itemCards:false});}
 function command(body:Record<string,unknown>):Extract<Command,{type:'debug'}>{return {id:randomUUID(),type:'debug',...body} as Extract<Command,{type:'debug'}>;}
 const host:Session={playerId:'host',name:'房主',admin:false,expiresAt:Date.now()+60000};
 

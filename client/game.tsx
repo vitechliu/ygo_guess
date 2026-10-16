@@ -4,7 +4,7 @@ import type { AdminRoom, Command, RoomView, ServerMessage, Session } from '../sh
 export type User=Pick<Session,'playerId'|'name'|'admin'>;
 export type Action = Command extends infer C ? C extends Command ? Omit<C,'id'> : never : never;
 export type Send=(action:Action)=>Promise<void>;
-export const phaseNames:Record<string,string>={lobby:'等待准备',setting:'出题阶段',guessing:'猜卡进行中','round-end':'本局结算','match-end':'比赛结束',closed:'已关闭'};
+export const phaseNames:Record<string,string>={lobby:'等待准备',setting:'出题阶段',guessing:'猜卡进行中','round-end':'本局结算','match-end':'本局结算',closed:'已关闭'};
 const uid=()=>globalThis.crypto?.randomUUID?.()??Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
 export async function api<T>(url:string,init?:RequestInit):Promise<T>{const res=await fetch(url,init);const body=await res.json();if(!res.ok)throw new Error(body.message??'连接失败，请重试');return body;}
 export function useGame(user:User|null){

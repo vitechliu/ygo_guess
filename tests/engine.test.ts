@@ -3,7 +3,7 @@ import * as E from '../server/engine.js';import {cards} from './fixtures.js';
 import { ITEM_CARDS } from '../shared/item-cards.js';
 import { DRAGONMAIDS } from '../shared/dragonmaids.js';
 import { PLAYABLE_MUSIC_TRACKS, musicCandidates } from '../shared/music.js';
-function room(n=3,mode:'custom'|'random'='custom',rounds=3,attempts=3){const r=E.createRoom('ABCDEF','p0','p0',{mode,rounds,attempts});for(let i=1;i<n;i++)E.join(r,'p'+i,'p'+i);r.players.forEach(p=>p.ready=true);return r;}
+function room(n=3,mode:'custom'|'random'='custom',attempts=3){const r=E.createRoom('ABCDEF','p0','p0',{mode,attempts});for(let i=1;i<n;i++)E.join(r,'p'+i,'p'+i);r.players.forEach(p=>p.ready=true);return r;}
 function setup(r:ReturnType<typeof room>,withTestCards=true){E.startRound(r,[],true);for(let i=0;i<r.entries.length;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);if(withTestCards&&r.settings.itemCards!==false)for(const e of r.entries)e.itemCards!.push({instanceId:'test-'+e.playerId,cardId:'test-card'});}
 test('item cards arrive on every third personal turn and can only be consumed on own turn',()=>{
  const r=room(2);setup(r,false);
@@ -108,7 +108,7 @@ test('book of moon covers only the selected card for three minutes and expires c
  assert.equal(r.visualEffects?.faceDown,undefined);
 });
 test('reborn restores only an online player who exhausted guesses, preserving turn count',()=>{
- const r=room(3, 'custom',3,1);setup(r);
+ const r=room(3, 'custom',1);setup(r);
  const p1Card=r.entries[1].card!;
  E.skip(r,'p0',r.turnId);
  E.guess(r,'p1',cards.find(card=>card.cid!==p1Card.cid)!,r.turnId);
@@ -145,7 +145,7 @@ test('reborn cannot target a player who gave up or lost by skipping a reversal t
  assert.throws(()=>E.useItemCard(reversed,'p0',reborn.instanceId,reversed.turnId,'p1',new Set(['p1'])),/请选择/);
 });
 test('reversal loses all attempts on a wrong guess or skip, while success still scores',()=>{
- const wrong=room(2,'custom',3,3);setup(wrong);
+ const wrong=room(2,'custom',3);setup(wrong);
  const item=wrong.entries[0].itemCards![0];item.cardId='reversal-card';
  E.useItemCard(wrong,'p0',item.instanceId,wrong.turnId);
  assert.equal(E.view(wrong,'p0',new Set()).reversalActive,true);
@@ -355,7 +355,7 @@ test('cyclic assignment, own answer privacy and waiting spectator card visibilit
  E.startRound(r);assert.equal(E.view(r,'late',new Set()).players.filter(p=>p.card).length,0);
 });
 test('unlimited skips, wrong guesses, stale turns and final remaining player',()=>{
- const r=room(2,'custom',1,2);setup(r);
+ const r=room(2,'custom',2);setup(r);
  const first=r.turnId;E.skip(r,'p0',first);assert.equal(r.entries[0].attempts,2);assert.equal(r.turnPlayerId,'p1');
  assert.throws(()=>E.guess(r,'p0',cards[1],first),/回合/);
  E.guess(r,'p1',cards[0],r.turnId);assert.equal(r.entries[1].points,1000);assert.equal(r.turnPlayerId,'p0');assert.equal(r.entries[0].turns,2);
@@ -364,7 +364,7 @@ test('unlimited skips, wrong guesses, stale turns and final remaining player',()
  assert.equal(r.chat.at(-1)?.kind,'guess-correct');assert.equal(r.chat.at(-1)?.text,'p1 猜对了卡牌「'+cards[0].name+'」，获得 1000 分');
  E.guess(r,'p0',cards[9],r.turnId);assert.equal(r.entries[0].attempts,1);assert.equal(r.turnPlayerId,'p0');assert.equal(r.entries[0].turns,3);
  assert.equal(r.chat.at(-1)?.kind,'guess-wrong');assert.match(r.chat.at(-1)!.text,/未猜中/);
- E.guess(r,'p0',cards[9],r.turnId);assert.equal(r.phase,'match-end');assert.equal(r.players[0].score,0);assert.equal(r.history.length,1);assert(E.view(r,'p0',new Set()).players.every(p=>p.card));
+ E.guess(r,'p0',cards[9],r.turnId);assert.equal(r.phase,'round-end');assert.equal(r.players[0].score,0);assert.equal(r.history.length,1);assert(E.view(r,'p0',new Set()).players.every(p=>p.card));
 });
 test('giving up consumes all remaining attempts and removes the player from this round',()=>{
  const r=room();setup(r);const old=r.turnId;
@@ -380,9 +380,25 @@ test('fewer own turns produce higher points and host advances to rotated starter
  for(let i=0;i<3;i++)E.submitCard(r,r.entries[i].playerId,cards[i],r.setupId);
  assert.equal(r.turnPlayerId,'p1');assert.equal(r.players.find(p=>p.id==='late')!.score,0);
 });
+test('rounds continue without a limit and every player keeps cumulative room scores',()=>{
+ const r=room(2,'random',1);
+ for(let round=1;round<=22;round++){
+  E.startRound(r,cards,round===1);
+  assert.equal(r.round,round);
+  for(let turn=0;turn<2;turn++){
+   const current=r.turnPlayerId!;
+   E.guess(r,current,r.entries.find(e=>e.playerId===current)!.card!,r.turnId);
+  }
+  assert.equal(r.phase,'round-end');
+  assert.equal(r.history.length,Math.min(round,20));
+  assert.deepEqual(r.players.map(p=>p.score),[round*1000,round*1000]);
+ }
+ assert.equal(r.history[0].round,3);
+ assert.throws(()=>E.startRound(r,cards,true),/比赛已开始/);
+});
 test('departures during setup reset the ring and invalidate previous setup id',()=>{
  const r=room();E.startRound(r,[],true);const old=r.setupId;E.submitCard(r,'p0',cards[0],old);E.leave(r,'p1',new Set(['p0','p2']));assert.equal(r.entries.length,2);assert(r.entries.every(e=>!e.card&&!e.submitted));assert.notEqual(r.setupId,old);assert.throws(()=>E.submitCard(r,'p2',cards[1],old));
- E.leave(r,'p0',new Set(['p2']));assert.equal(r.phase,'match-end');assert.equal(r.hostId,'p2');
+ E.leave(r,'p0',new Set(['p2']));assert.equal(r.phase,'round-end');assert.equal(r.hostId,'p2');
 });
 test('departure of waiting newcomer does not reset current setup',()=>{
  const r=room();E.startRound(r,[],true);E.submitCard(r,'p0',cards[0],r.setupId);const previous=r.setupId;E.join(r,'late','late');E.leave(r,'late',new Set());assert.equal(r.setupId,previous);assert.equal(r.entries[0].submitted,true);
@@ -401,5 +417,5 @@ test('a departed player can rejoin with the same identity and keep their score',
  assert.throws(()=>E.join(r,'p1','renamed'),/已经在这个房间/);
 });
 test('solved player leaving still reduces current participation count',()=>{
- const r=room(2);setup(r);E.guess(r,'p0',cards[1],r.turnId);E.leave(r,'p0',new Set(['p1']));assert.equal(r.phase,'match-end');assert.equal(r.players[0].score,1000);
+ const r=room(2);setup(r);E.guess(r,'p0',cards[1],r.turnId);E.leave(r,'p0',new Set(['p1']));assert.equal(r.phase,'round-end');assert.equal(r.players[0].score,1000);
 });

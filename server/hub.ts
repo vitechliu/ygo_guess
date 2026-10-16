@@ -14,14 +14,14 @@ function lastActivity(room:RoomState){
   return room.lastActivityAt??Math.max(room.createdAt,...room.processed.map(p=>p.at),...room.chat.filter(m=>!m.system).map(m=>m.time));
 }
 const code=z.string().regex(/^[A-Z2-9]{6}$/), playerId=z.string().max(64), turnId=z.string().uuid();
-const settings=z.object({mode:z.enum(['custom','random']),rounds:z.number().int().min(1).max(20),attempts:z.number().int().min(1).max(10),itemCards:z.boolean().default(true)});
+const settings=z.object({mode:z.enum(['custom','random']),attempts:z.number().int().min(1).max(10),itemCards:z.boolean().default(true)});
 const debugCardId=z.custom<keyof typeof ITEM_CARDS>(value=>typeof value==='string'&&Object.hasOwn(ITEM_CARDS,value));
 const schemas=[
   z.object({...base,type:z.literal('create'),settings}),
   z.object({...base,type:z.literal('update-settings'),settings}),
   z.object({...base,type:z.literal('join'),code}),
   z.object({...base,type:z.literal('ready'),ready:z.boolean()}),
-  ...(['start','next','leave','again','admin-list','shuffle'] as const).map(type=>z.object({...base,type:z.literal(type)})),
+  ...(['start','next','leave','admin-list','shuffle'] as const).map(type=>z.object({...base,type:z.literal(type)})),
   z.object({...base,type:z.literal('set-card'),cardId:z.number().int().positive().max(9999999999),setupId:z.string().uuid()}),
   z.object({...base,type:z.literal('guess'),cardId:z.number().int().positive().max(9999999999),turnId}),
   z.object({...base,type:z.literal('use-item-card'),instanceId:z.string().uuid(),turnId,targetPlayerId:playerId.optional()}),
@@ -52,7 +52,12 @@ export class Hub {
   private drawingActivity=new Map<string,number>();
   constructor(private store:Store,private cards:CardProvider,private hostGraceMs=30000,private debugEnabled=false){}
   async init(){
-    for(const r of await this.store.loadRooms())this.rooms.set(r.code,r);
+    for(const r of await this.store.loadRooms()){
+      // Rooms saved before unlimited rounds may be at their old match boundary.
+      if(r.phase==='match-end')r.phase='round-end';
+      r.settings={mode:r.settings.mode,attempts:r.settings.attempts,itemCards:r.settings.itemCards};
+      this.rooms.set(r.code,r);
+    }
     await this.cleanupRooms();
     this.timer=setInterval(()=>void this.enqueue(async()=>{await this.persistDrawingActivity();await this.transferOfflineHosts();await this.expireVisualEffects();}).catch(()=>console.error('Room timer failed')),1000);
     this.timer.unref();
@@ -183,7 +188,6 @@ export class Hub {
           case 'skip':E.skip(r,session.playerId,c.turnId,r.turnPlayerId!==session.playerId&&(r.hostId===session.playerId||session.admin));break;
           case 'kick':host();E.requireGame(c.playerId!==session.playerId,'房主不能移除自己');E.leave(r,c.playerId,this.online(),'房主');break;
           case 'leave':E.leave(r,session.playerId,this.online());break;
-          case 'again':host();E.again(r);r.createdAt=Date.now();break;
           case 'chat':r.chat.push({id:c.id,playerId:session.playerId,name:r.players.find(p=>p.id===session.playerId)?.name??session.name,text:c.text,time:Date.now()});r.chat=r.chat.slice(-100);break;
           case 'debug':host();E.debugAction(r,c);break;
           case 'admin-skip':E.skip(r,session.playerId,c.turnId,true);break;

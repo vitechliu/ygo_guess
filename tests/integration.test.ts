@@ -3,7 +3,7 @@ import {EventEmitter} from 'node:events';
 import {SqliteStore} from '../server/store.js';import {Hub,parseCommand} from '../server/hub.js';import {FileCache} from '../server/cache.js';import {Cards} from '../server/cards.js';import {createApp} from '../server/app.js';import {FixtureCards,cards,session} from './fixtures.js';import type {Command,ServerMessage,RoomView} from '../shared/types.js';
 async function harness(){const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-test-'));const store=new SqliteStore(path.join(dir,'test.sqlite'));const hub=new Hub(store,new FixtureCards(),1);await hub.init();return {dir,store,hub,async close(){await hub.close();await store.close();}};}
 const cmd=(body:any)=>({...body,id:randomUUID()}) as Command;
-async function started(h:Hub){await h.handle(session('a'),cmd({type:'create',settings:{mode:'random',rounds:2,attempts:3}}));const r=h.roomFor('a')!;await h.handle(session('b'),cmd({type:'join',code:r.code}));await h.handle(session('b'),cmd({type:'ready',ready:true}));await h.handle(session('a'),cmd({type:'start'}));return h.roomFor('a')!;}
+async function started(h:Hub){await h.handle(session('a'),cmd({type:'create',settings:{mode:'random',attempts:3}}));const r=h.roomFor('a')!;await h.handle(session('b'),cmd({type:'join',code:r.code}));await h.handle(session('b'),cmd({type:'ready',ready:true}));await h.handle(session('a'),cmd({type:'start'}));return h.roomFor('a')!;}
 test('drawing stream is live, private to the chosen drawer, and recoverable on reconnect',async()=>{
  const h=await harness();
  class Socket extends EventEmitter {
@@ -100,24 +100,47 @@ test('changeover alone expires through the room timer and storage',async()=>{
 });
 test('only the host can change lobby settings and changed rules require fresh readiness',async()=>{
  const h=await harness();try{
-  await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',rounds:2,attempts:3}}));const code=h.hub.roomFor('a')!.code;
+  await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',attempts:3}}));const code=h.hub.roomFor('a')!.code;
   await h.hub.handle(session('b'),cmd({type:'join',code}));await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));
-  const changed=cmd({type:'update-settings',settings:{mode:'random',rounds:4,attempts:2}});
+  const changed=cmd({type:'update-settings',settings:{mode:'random',attempts:2}});
   await assert.rejects(h.hub.handle(session('b'),changed),/房主/);
-  assert.throws(()=>parseCommand({id:randomUUID(),type:'update-settings',settings:{mode:'random',rounds:21,attempts:2}}));
-  await h.hub.handle(session('a'),changed);let room=h.hub.roomFor('a')!;assert.deepEqual(room.settings,{mode:'random',rounds:4,attempts:2});assert.equal(room.players.find(p=>p.id==='b')!.ready,false);
+  assert.throws(()=>parseCommand({id:randomUUID(),type:'update-settings',settings:{mode:'random',attempts:21}}));
+  await h.hub.handle(session('a'),changed);let room=h.hub.roomFor('a')!;assert.deepEqual(room.settings,{mode:'random',attempts:2});assert.equal(room.players.find(p=>p.id==='b')!.ready,false);
   assert.deepEqual((await h.store.loadRooms()).find(r=>r.code===code)?.settings,room.settings);
   const notices=room.chat.filter(m=>m.text.includes('房主修改了规则')).length;await h.hub.handle(session('a'),changed);assert.equal(h.hub.roomFor('a')!.chat.filter(m=>m.text.includes('房主修改了规则')).length,notices);
   await assert.rejects(h.hub.handle(session('a'),cmd({type:'start'})),/准备/);
-  await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));await h.hub.handle(session('a'),cmd({type:'update-settings',settings:{mode:'custom',rounds:2,attempts:3}}));
+  await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));await h.hub.handle(session('a'),cmd({type:'update-settings',settings:{mode:'custom',attempts:3}}));
   room=h.hub.roomFor('a')!;assert.equal(room.players.find(p=>p.id==='b')!.ready,false);
   await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));await h.hub.handle(session('a'),cmd({type:'start'}));
-  await assert.rejects(h.hub.handle(session('a'),cmd({type:'update-settings',settings:{mode:'random',rounds:4,attempts:2}})),/比赛开始后/);
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'update-settings',settings:{mode:'random',attempts:2}})),/比赛开始后/);
+ }finally{await h.close();}
+});
+test('legacy completed room resumes at round end with scores intact',async()=>{
+ const h=await harness();
+ try{
+  const r=await started(h.hub);
+  r.players[0].score=2000;
+  r.players[1].score=1000;
+  r.round=2;
+  r.phase='match-end';
+  (r.settings as typeof r.settings & {rounds:number}).rounds=2;
+  await h.store.saveRoom(r);
+  await h.hub.close();
+  const restored=new Hub(h.store,new FixtureCards());
+  await restored.init();
+  try{
+   const room=restored.roomFor('a')!;
+   assert.equal(room.phase,'round-end');
+   assert.equal('rounds' in room.settings,false);
+   await restored.handle(session('a'),cmd({type:'next'}));
+   assert.equal(restored.roomFor('a')!.round,3);
+   assert.deepEqual(restored.roomFor('a')!.players.map(p=>p.score),[2000,1000]);
+  }finally{await restored.close();}
  }finally{await h.close();}
 });
 test('host can shuffle the lobby repeatedly while readiness and persisted order stay intact',async()=>{
  const h=await harness();try{
-  await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',rounds:2,attempts:3}}));const code=h.hub.roomFor('a')!.code;
+  await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',attempts:3}}));const code=h.hub.roomFor('a')!.code;
   await h.hub.handle(session('b'),cmd({type:'join',code}));await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));
   await assert.rejects(h.hub.handle(session('b'),cmd({type:'shuffle'})),/房主/);
   const original=h.hub.roomFor('a')!.players.map(p=>p.seat);
@@ -131,7 +154,7 @@ test('host can shuffle the lobby repeatedly while readiness and persisted order 
  }finally{await h.close();}
 });
 test('server rejects nonhost start, wrong-turn guesses, forged permissions and malformed commands',async()=>{
- const h=await harness();try{const r=await started(h.hub);await assert.rejects(h.hub.handle(session('b'),cmd({type:'next'})),/房主/);await assert.rejects(h.hub.handle(session('b'),cmd({type:'guess',cardId:100,turnId:r.turnId})),/轮到/);await assert.rejects(h.hub.handle(session('b'),cmd({type:'admin-close',code:r.code})),/管理员/);assert.throws(()=>parseCommand({id:'x',type:'create',settings:{mode:'random',rounds:0,attempts:99}}));}finally{await h.close();}
+ const h=await harness();try{const r=await started(h.hub);await assert.rejects(h.hub.handle(session('b'),cmd({type:'next'})),/房主/);await assert.rejects(h.hub.handle(session('b'),cmd({type:'guess',cardId:100,turnId:r.turnId})),/轮到/);await assert.rejects(h.hub.handle(session('b'),cmd({type:'admin-close',code:r.code})),/管理员/);assert.throws(()=>parseCommand({id:'x',type:'create',settings:{mode:'random',attempts:99}}));}finally{await h.close();}
 });
 test('giving up is turn-bound and host-only kick preserves settled room state',async()=>{
  const h=await harness();try{
@@ -144,7 +167,7 @@ test('giving up is turn-bound and host-only kick preserves settled room state',a
   await assert.rejects(h.hub.handle(session('a'),cmd({type:'give-up',turnId:old})),/回合/);
   assert.equal((await h.store.loadRooms()).find(x=>x.code===r.code)?.entries[0].attempts,0);
   await h.hub.handle(session('a'),cmd({type:'kick',playerId:'b'}));r=h.hub.roomFor('a')!;
-  assert.equal(r.phase,'match-end');assert.equal(r.players.find(p=>p.id==='b')?.left,true);
+  assert.equal(r.phase,'round-end');assert.equal(r.players.find(p=>p.id==='b')?.left,true);
   assert(r.chat.some(m=>m.text==='b 被房主移出了房间'));
   assert.equal(h.hub.roomFor('b'),undefined);
   assert.equal((await h.store.loadRooms()).find(x=>x.code===r.code)?.players.find((p:{id:string;left:boolean})=>p.id==='b')?.left,true);
@@ -166,8 +189,8 @@ test('storage failure leaves live state untouched',async()=>{
 });
 test('joining an invitation switches rooms only after the destination is valid and saves both rooms',async()=>{
  const h=await harness();try{
-  await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',rounds:2,attempts:3}}));const old=h.hub.roomFor('a')!.code;
-  await h.hub.handle(session('b'),cmd({type:'create',settings:{mode:'custom',rounds:2,attempts:3}}));const next=h.hub.roomFor('b')!.code;
+  await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',attempts:3}}));const old=h.hub.roomFor('a')!.code;
+  await h.hub.handle(session('b'),cmd({type:'create',settings:{mode:'custom',attempts:3}}));const next=h.hub.roomFor('b')!.code;
   await assert.rejects(h.hub.handle(session('a'),cmd({type:'join',code:'ZZZZZZ'})),/找不到/);
   assert.equal(h.hub.roomFor('a')?.code,old);
   const original=h.store.saveRooms.bind(h.store);h.store.saveRooms=async()=>{throw new Error('disk unavailable');};
@@ -196,7 +219,7 @@ test('a kicked player can rejoin the same match with their existing score',async
 test('admin list has no card data, admin can transfer, remove and close',async()=>{
  const h=await harness();try{const r=await started(h.hub);const a=session('admin',true);const list=await h.hub.handle(a,cmd({type:'admin-list'}));assert(!JSON.stringify(list).includes('"card"'));assert(!JSON.stringify(list).includes('"cid"'));
  await h.hub.handle(a,cmd({type:'admin-skip',code:r.code,turnId:r.turnId}));assert.equal(h.hub.roomFor('a')!.turnPlayerId,'b');
- await h.hub.handle(a,cmd({type:'admin-kick',code:r.code,playerId:'b'}));assert.equal(h.hub.roomFor('a')!.phase,'match-end');await h.hub.handle(a,cmd({type:'admin-close',code:r.code}));assert.equal(h.hub.roomFor('a'),undefined);
+ await h.hub.handle(a,cmd({type:'admin-kick',code:r.code,playerId:'b'}));assert.equal(h.hub.roomFor('a')!.phase,'round-end');await h.hub.handle(a,cmd({type:'admin-close',code:r.code}));assert.equal(h.hub.roomFor('a'),undefined);
  }finally{await h.close();}
 });
 test('file cache survives reopen and card API falls back to stale cached data',async()=>{
@@ -221,7 +244,7 @@ test('real HTTP and WebSocket transport, origin guard, admin cookie and reconnec
  const getGuest=async(name:string)=>{const res=await fetch(base+'/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});return {cookie:res.headers.get('set-cookie')!.split(';')[0],session:(await res.json()).session};};
  const a=await getGuest('网络A'),b=await getGuest('网络B');const ca=await connect(a.cookie),cb=await connect(b.cookie);
  const proxied=new WebSocket('ws://127.0.0.1:'+port+'/ws',{headers:{Host:'ark.example:443',Origin:'https://ark.example',Cookie:a.cookie}});sockets.push(proxied);await new Promise<void>((resolve,reject)=>{proxied.once('open',()=>resolve());proxied.once('error',reject);});
- const create=cmd({type:'create',settings:{mode:'random',rounds:1,attempts:1}});ca.ws.send(JSON.stringify(create));await ca.wait(m=>m.type==='ack'&&m.id===create.id);
+ const create=cmd({type:'create',settings:{mode:'random',attempts:1}});ca.ws.send(JSON.stringify(create));await ca.wait(m=>m.type==='ack'&&m.id===create.id);
  const code=app.hub.roomFor(a.session.playerId)!.code;const join=cmd({type:'join',code});cb.ws.send(JSON.stringify(join));await cb.wait(m=>m.type==='ack'&&m.id===join.id);
  const ready=cmd({type:'ready',ready:true});cb.ws.send(JSON.stringify(ready));await cb.wait(m=>m.type==='ack'&&m.id===ready.id);
  const start=cmd({type:'start'});ca.ws.send(JSON.stringify(start));await ca.wait(m=>m.type==='ack'&&m.id===start.id);

@@ -22,7 +22,7 @@ class Socket extends EventEmitter {
   close(){this.readyState=WebSocket.CLOSED;this.emit('close');}
 }
 function room(code:string,at:number):RoomState {
-  const r=E.createRoom(code,code,code,{mode:'random',rounds:1,attempts:3});
+  const r=E.createRoom(code,code,code,{mode:'random',attempts:3});
   r.createdAt=at;r.lastActivityAt=at;
   return r;
 }
@@ -67,7 +67,7 @@ test('cleanup evicts all idle members, deletes closed rooms, and preserves fresh
     try{assert.equal(db.prepare('SELECT COUNT(*) AS n FROM results').get()!.n,1);}finally{db.close();}
     await assert.rejects(h.hub.handle(session('guest'),cmd({type:'join',code:idle.code})),/找不到/);
     await assert.rejects(h.hub.handle(session(idle.hostId),cmd({type:'chat',text:'stale'})),/不存在/);
-    await h.hub.handle(session('guest'),cmd({type:'create',settings:{mode:'random',rounds:1,attempts:3}}));
+    await h.hub.handle(session('guest'),cmd({type:'create',settings:{mode:'random',attempts:3}}));
     assert(h.hub.roomFor('guest'));
   }finally{await h.close();}
 });
