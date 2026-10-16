@@ -64,7 +64,7 @@ test('cleanup evicts all idle members, deletes closed rooms, and preserves fresh
     assert.deepEqual((await h.store.loadRooms()).map(r=>r.code),[fresh.code]);
     assert.equal((await h.store.getSession('cookie'))?.playerId,idle.hostId);
     const db=new DatabaseSync(h.filename);
-    try{assert.equal(db.prepare('SELECT COUNT(*) AS n FROM results').get()!.n,1);}finally{db.close();}
+    try{assert.equal(db.prepare('SELECT COUNT(*) AS n FROM cg_results').get()!.n,1);}finally{db.close();}
     await assert.rejects(h.hub.handle(session('guest'),cmd({type:'join',code:idle.code})),/找不到/);
     await assert.rejects(h.hub.handle(session(idle.hostId),cmd({type:'chat',text:'stale'})),/不存在/);
     await h.hub.handle(session('guest'),cmd({type:'create',settings:{mode:'random',attempts:3}}));
