@@ -5,7 +5,7 @@ import mysql, { type Pool } from 'mysql2/promise';
 import type { RoomState, Session } from '../shared/types.js';
 export interface Audit { actor: string; action: string; target: string }
 export interface Store {
-  loadRooms():Promise<RoomState[]>; saveRoom(room:RoomState,audit?:Audit):Promise<void>; saveRooms(rooms:RoomState[]):Promise<void>;
+  loadRooms():Promise<RoomState[]>; saveRoom(room:RoomState,audit?:Audit):Promise<void>; saveRooms(rooms:RoomState[]):Promise<void>; deleteRooms(codes:string[]):Promise<void>;
   getSession(hash:string):Promise<Session|null>; putSession(hash:string,session:Session):Promise<void>; close():Promise<void>;
 }
 export class SqliteStore implements Store {
@@ -23,6 +23,15 @@ export class SqliteStore implements Store {
   async loadRooms(){return (this.db.prepare('SELECT state FROM rooms').all() as {state:string}[]).map(r=>JSON.parse(r.state));}
   async saveRoom(room:RoomState,audit?:Audit){await this.saveTransaction([room],audit);}
   async saveRooms(rooms:RoomState[]){await this.saveTransaction(rooms);}
+  async deleteRooms(codes:string[]){
+    if(!codes.length)return;
+    this.db.exec('BEGIN IMMEDIATE');
+    try{
+      const remove=this.db.prepare('DELETE FROM rooms WHERE code=?');
+      for(const code of codes)remove.run(code);
+      this.db.exec('COMMIT');
+    }catch(error){this.db.exec('ROLLBACK');throw error;}
+  }
   private async saveTransaction(rooms:RoomState[],audit?:Audit){
     this.db.exec('BEGIN IMMEDIATE');
     try{
@@ -53,6 +62,15 @@ export class MysqlStore implements Store {
   async loadRooms(){const [rows]=await this.pool.query('SELECT state FROM rooms');return (rows as {state:string}[]).map(r=>JSON.parse(r.state));}
   async saveRoom(room:RoomState,audit?:Audit){await this.saveTransaction([room],audit);}
   async saveRooms(rooms:RoomState[]){await this.saveTransaction(rooms);}
+  async deleteRooms(codes:string[]){
+    if(!codes.length)return;
+    const c=await this.pool.getConnection();
+    try{
+      await c.beginTransaction();
+      for(const code of codes)await c.execute('DELETE FROM rooms WHERE code=?',[code]);
+      await c.commit();
+    }catch(error){await c.rollback();throw error;}finally{c.release();}
+  }
   private async saveTransaction(rooms:RoomState[],audit?:Audit){
     const c=await this.pool.getConnection();await c.beginTransaction();
     try{

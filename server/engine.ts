@@ -94,7 +94,7 @@ export function expireVisualEffects(r:RoomState,now=Date.now()) {
 }
 export function system(r: RoomState, text: string, kind?: Chat['kind'], recipientPlayerId?:string) { r.chat.push({id:randomUUID(),name:'房间消息',text,time:Date.now(),system:true,...(kind?{kind}:{}),...(recipientPlayerId?{recipientPlayerId}:{})}); r.chat=r.chat.slice(-100); }
 export function createRoom(code: string, playerId: string, name: string, settings: Settings): RoomState {
-  return {code,hostId:playerId,settings,phase:'lobby',round:0,players:[{id:playerId,name,seat:0,score:0,ready:false,left:false}],entries:[],turnPlayerId:null,turnId:'',setupId:'',version:0,chat:[],history:[],processed:[],createdAt:Date.now()};
+  return {code,hostId:playerId,settings,phase:'lobby',round:0,players:[{id:playerId,name,seat:0,score:0,ready:false,left:false}],entries:[],turnPlayerId:null,turnId:'',setupId:'',version:0,chat:[],history:[],processed:[],createdAt:Date.now(),lastActivityAt:Date.now()};
 }
 export function join(r: RoomState, id: string, name: string) {
   requireGame(r.phase!=='closed','房间已关闭');

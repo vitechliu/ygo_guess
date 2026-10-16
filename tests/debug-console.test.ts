@@ -56,6 +56,7 @@ test('debug protocol rejects unknown cards and server gates commands by mode and
     async loadRooms(){return saved?[saved]:[];},
     async saveRoom(r:RoomState){saved=structuredClone(r);},
     async saveRooms(rooms:RoomState[]){saved=structuredClone(rooms.at(-1)!);},
+    async deleteRooms(){saved=undefined;},
     async getSession(){return null;},
     async putSession(){},
     async close(){},

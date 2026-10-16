@@ -8,6 +8,11 @@ import { ITEM_CARDS } from '../shared/item-cards.js';
 import * as E from './engine.js';
 
 const base={id:z.string().min(1).max(80)};
+const ROOM_IDLE_MS=3*60*60*1000;
+const ROOM_CLEANUP_INTERVAL_MS=60*60*1000;
+function lastActivity(room:RoomState){
+  return room.lastActivityAt??Math.max(room.createdAt,...room.processed.map(p=>p.at),...room.chat.filter(m=>!m.system).map(m=>m.time));
+}
 const code=z.string().regex(/^[A-Z2-9]{6}$/), playerId=z.string().max(64), turnId=z.string().uuid();
 const settings=z.object({mode:z.enum(['custom','random']),rounds:z.number().int().min(1).max(20),attempts:z.number().int().min(1).max(10),itemCards:z.boolean().default(true)});
 const debugCardId=z.custom<keyof typeof ITEM_CARDS>(value=>typeof value==='string'&&Object.hasOwn(ITEM_CARDS,value));
@@ -43,9 +48,18 @@ export class Hub {
   rooms=new Map<string,RoomState>(); private clients=new Set<Client>(); private tail:Promise<unknown>=Promise.resolve();
   private drawings=new Map<string,{id:string;strokes:DrawingStroke[];pointCount:number}>();
   private away=new Map<string,number>(); private timer?:NodeJS.Timeout; private recent=new Map<string,number>();
+  private cleanupTimer?:NodeJS.Timeout;
+  private drawingActivity=new Map<string,number>();
   constructor(private store:Store,private cards:CardProvider,private hostGraceMs=30000,private debugEnabled=false){}
-  async init(){for(const r of await this.store.loadRooms())this.rooms.set(r.code,r);this.timer=setInterval(()=>void this.enqueue(async()=>{await this.transferOfflineHosts();await this.expireVisualEffects();}).catch(()=>console.error('Room timer failed')),1000);this.timer.unref();}
-  async close(){clearInterval(this.timer);for(const c of this.clients)c.ws.close(1001,'服务正在重启');await this.tail;}
+  async init(){
+    for(const r of await this.store.loadRooms())this.rooms.set(r.code,r);
+    await this.cleanupRooms();
+    this.timer=setInterval(()=>void this.enqueue(async()=>{await this.persistDrawingActivity();await this.transferOfflineHosts();await this.expireVisualEffects();}).catch(()=>console.error('Room timer failed')),1000);
+    this.timer.unref();
+    this.cleanupTimer=setInterval(()=>void this.cleanupRooms().catch(()=>console.error('Room cleanup failed')),ROOM_CLEANUP_INTERVAL_MS);
+    this.cleanupTimer.unref();
+  }
+  async close(){clearInterval(this.timer);clearInterval(this.cleanupTimer);for(const c of this.clients)c.ws.close(1001,'服务正在重启');await this.enqueue(()=>this.persistDrawingActivity());}
   online(){return new Set([...this.clients].filter(c=>c.ws.readyState===WebSocket.OPEN).map(c=>c.session.playerId));}
   private onlineFor(r:RoomState){const online=this.online();if(this.debugEnabled)for(const player of r.players)if(!player.left&&player.id==='debug-bot:'+r.code)online.add(player.id);return online;}
   roomFor(id:string){return [...this.rooms.values()].find(r=>r.phase!=='closed'&&r.players.some(p=>p.id===id&&!p.left));}
@@ -62,8 +76,10 @@ export class Hub {
       if(command.type==='drawing-stroke'){
         c.drawTokens=Math.min(24,c.drawTokens+(now-c.drawAt)/1000*15);c.drawAt=now;
         if(c.drawTokens<1){this.send(ws,{type:'error',id:command.id,message:'绘画太快，请稍候'});return;}c.drawTokens--;
-        try{this.handleDrawingStroke(session,command);this.send(ws,{type:'ack',id:command.id});}
-        catch(error){this.send(ws,{type:'error',id:command.id,message:error instanceof E.GameError?error.message:'绘画失败'});}
+        const stroke=command;
+        void this.enqueue(async()=>this.handleDrawingStroke(session,stroke)).then(()=>this.send(ws,{type:'ack',id:stroke.id})).catch(error=>{
+          this.send(ws,{type:'error',id:stroke.id,message:error instanceof E.GameError?error.message:'绘画失败'});
+        });
         return;
       }
       c.tokens=Math.min(30,c.tokens+(now-c.at)/1000*5);c.at=now;
@@ -88,6 +104,7 @@ export class Hub {
     if(c.continuation)drawing.strokes.at(-1)!.points.push(...c.points);
     else {E.requireGame(drawing.strokes.length<500,'画板已达到笔画上限，请关闭画板');drawing.strokes.push({points:[...c.points]});}
     drawing.pointCount+=c.points.length;
+    this.drawingActivity.set(room.code,Date.now());
     for(const client of this.clients)if(this.roomFor(client.session.playerId)?.code===room.code)this.send(client.ws,{type:'drawing-stroke',drawingId:c.drawingId,points:c.points,continuation:c.continuation});
   }
   broadcast(){
@@ -145,7 +162,7 @@ export class Hub {
         const current=this.roomFor(session.playerId);
         if(current?.code===c.code)return;
         r=structuredClone(found);E.join(r,session.playerId,session.name);
-        if(current){previousRoom=structuredClone(current);E.leave(previousRoom,session.playerId,this.online());previousRoom.version++;}
+        if(current){previousRoom=structuredClone(current);E.leave(previousRoom,session.playerId,this.online());previousRoom.version++;previousRoom.lastActivityAt=Date.now();}
       }else{
         const found='code' in c?this.rooms.get(c.code):this.roomFor(session.playerId);
         E.requireGame(found&&found.phase!=='closed','房间不存在或已关闭');r=structuredClone(found);
@@ -176,7 +193,8 @@ export class Hub {
         }
         if(c.type.startsWith('admin-'))audit={actor:session.playerId,action:c.type,target:r.code+('playerId'in c?':'+c.playerId:'')};
       }
-      r.version++;r.processed.push({key,at:Date.now()});r.processed=r.processed.slice(-500);
+      r.lastActivityAt=Date.now();
+      r.version++;r.processed.push({key,at:r.lastActivityAt});r.processed=r.processed.slice(-500);
       if(previousRoom)await this.store.saveRooms([previousRoom,r]);
       else await this.store.saveRoom(r,audit);
       if(previousRoom)this.rooms.set(previousRoom.code,previousRoom);
@@ -184,6 +202,33 @@ export class Hub {
       if(this.recent.size>3000){for(const [k,at]of this.recent)if(at<Date.now()-3600000||this.recent.size>3000)this.recent.delete(k);}
       this.broadcast();
     });
+  }
+  async cleanupRooms(){
+    return this.enqueue(async()=>{
+      const cutoff=Date.now()-ROOM_IDLE_MS;
+      const expired=[...this.rooms.values()].filter(r=>r.phase==='closed'||Math.max(lastActivity(r),this.drawingActivity.get(r.code)??0)<=cutoff);
+      if(!expired.length)return;
+      // Delete durable state first; a failed transaction must leave live rooms intact.
+      await this.store.deleteRooms(expired.map(r=>r.code));
+      for(const r of expired){
+        this.rooms.delete(r.code);
+        this.away.delete(r.code);
+        this.drawings.delete(r.code);
+        this.drawingActivity.delete(r.code);
+      }
+      this.broadcast();
+    });
+  }
+  private async persistDrawingActivity(){
+    for(const [code,at] of this.drawingActivity){
+      const old=this.rooms.get(code);
+      if(old&&at>lastActivity(old)){
+        const r=structuredClone(old);r.lastActivityAt=at;
+        await this.store.saveRoom(r);
+        this.rooms.set(code,r);
+      }
+      this.drawingActivity.delete(code);
+    }
   }
   async transferOfflineHosts(){
     const online=this.online();

@@ -23,8 +23,10 @@ test('drawing stream is live, private to the chosen drawer, and recoverable on r
    const stroke=cmd({type:'drawing-stroke',drawingId:drawing.id,points:[[10,20],[80,90]],continuation:false});
    assert.throws(()=>parseCommand({...stroke,points:[[900,20]]}),/格式/);
    a.emit('message',Buffer.from(JSON.stringify(stroke)));
+   await new Promise(resolve=>setImmediate(resolve));
    assert(a.messages.some(m=>m.type==='error'&&m.id===stroke.id));
    b.emit('message',Buffer.from(JSON.stringify(stroke)));
+   await new Promise(resolve=>setImmediate(resolve));
    assert(a.messages.some(m=>m.type==='drawing-stroke'&&m.drawingId===drawing.id));
    assert(b.messages.some(m=>m.type==='ack'&&m.id===stroke.id));
    b.close();
