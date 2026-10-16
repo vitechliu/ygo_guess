@@ -1,9 +1,9 @@
 import { randomUUID, randomInt } from 'node:crypto';
-import type { Card, RoomState, RoomView, Settings, Entry, ItemCardId, Chat, Command } from '../shared/types.js';
+import type { Card, RoomState, RoomView, Settings, Entry, ItemCardId, Chat, Command, MaskAppearance } from '../shared/types.js';
 import { ITEM_CARDS } from '../shared/item-cards.js';
 import { PLAYABLE_MUSIC_TRACKS, musicCandidates } from '../shared/music.js';
 import { MASKED_HEROES } from '../shared/masked-heroes.js';
-import { DRAGONMAIDS } from '../shared/dragonmaids.js';
+import { DRAGONMAID_IDS } from '../shared/dragonmaids.js';
 
 export class GameError extends Error {}
 export function requireGame(value: unknown, message: string): asserts value { if (!value) throw new GameError(message); }
@@ -167,7 +167,7 @@ export function validateTurn(r: RoomState, id: string, turnId: string, force=fal
   requireGame(r.phase==='guessing'&&r.turnId===turnId,'回合已变化，请以最新状态为准');
   requireGame(force||r.turnPlayerId===id,'还没有轮到你');
 }
-export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:string,targetPlayerId?:string,online=new Set<string>()) {
+export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:string,targetPlayerId?:string,online=new Set<string>(),changeoverAppearance?:MaskAppearance) {
   validateTurn(r,id,turnId);
   requireGame(r.settings.itemCards!==false,'本房间未开启道具卡');
   const e=r.entries.find(e=>e.playerId===id);
@@ -189,6 +189,7 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
   if(card.id==='scanner-card')requireGame(e.card,'本局卡牌尚未设置');
   if(card.id==='countdown-card')requireGame(!r.finalCountdown,'终焉倒计时已经开始');
   if(card.id==='music-card')requireGame(PLAYABLE_MUSIC_TRACKS.length>0,'音乐曲库尚未配置可播放歌曲');
+  if(card.id==='changeover-card')requireGame(changeoverAppearance&&DRAGONMAID_IDS.some(id=>id===changeoverAppearance.id)&&/^(半龙女仆|龙女仆)/.test(changeoverAppearance.name),'半龙女仆卡牌资料暂不可用，请稍后重试');
   e.itemCards!.splice(index,1);
   const name=r.players.find(p=>p.id===id)!.name;
   switch(card.id){
@@ -211,7 +212,7 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
       break;
     }
     case 'changeover-card': {
-      const appearance=DRAGONMAIDS[randomInt(DRAGONMAIDS.length)];
+      const appearance=changeoverAppearance!;
       r.visualEffects??={};
       r.visualEffects.dragonmaidOutfits??={};
       r.visualEffects.dragonmaidOutfits[target!.playerId]={id:randomUUID(),endsAt:Date.now()+60000,appearance};

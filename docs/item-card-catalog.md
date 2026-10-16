@@ -9,7 +9,7 @@
 | 禁止卡 | [Prohibition](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=4968&ope=2&request_locale=en)（禁止令） | 待上线 | 自己回合指定一名仍在本局行动的其他玩家，跳过其下次回合。 | 权重 100；卡牌 ID：`prohibition-card`；可叠加，多次跳过依次生效；被跳过的回合不计入其得分用的个人回合数。 |
 | 增殖卡 | [Maxx "C"](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=9455&ope=2&request_locale=en)（增殖的G） | 待上线 | 自己回合使用后，所有玩家卡图出现会随机变换位置的可爱卡通蟑螂，持续 3 分钟。 | 权重 20；卡牌 ID：`maxx-c-card`；再次使用会刷新持续时间；本局结算时效果结束。 |
 | 假面卡 | [Mask Change](https://www.db.yugioh-card.com/yugiohdb/card_search.action?cid=9066&ope=2&request_locale=en)（假面变化） | 待上线 | 自己回合使用后，场上每张卡获得不同的随机假面英雄外观，持续 1 分钟，真实答案和猜测规则不变。 | 权重 50；卡牌 ID：`mask-change-card`；再次使用会重新随机并刷新持续时间；本局结算时效果结束。 |
-| 更衣卡 | [半龙女仆的更衣](https://ygocdb.com/card/40110009)（魔法卡） | 待上线 | 指定场上一名玩家（可选自己），其卡牌变成随机半龙女仆怪兽外观，持续 1 分钟。 | 权重 100；ID：`changeover-card`；仅改变外观；同一目标重复使用会重新随机并刷新时间；与假面卡同时生效时优先显示更衣外观；卡图取来源卡插画区域并本地压缩。 |
+| 更衣卡 | [半龙女仆的更衣](https://ygocdb.com/card/40110009)（魔法卡） | 待上线 | 指定场上一名玩家（可选自己），其卡牌变成随机半龙女仆怪兽外观，持续 1 分钟。 | 权重 100；ID：`changeover-card`；外观从百鸽接口取得中文卡名与项目统一卡图；仅改变外观；同一目标重复使用会重新随机并刷新时间；与假面卡同时生效时优先显示更衣外观；道具卡图取来源卡插画区域并本地压缩。 |
 | 机会卡 | 第二次机会 | 待上线 | 自己回合使用，本局剩余猜测机会 +1。 | 权重 150；卡牌 ID：`chance-card`；绿色魔法卡外框。 |
 | 雷击卡 | 雷击 | 待上线 | 页面随机出现雷电，持续 3 分钟。 | 权重 50；卡牌 ID：`lightning-card`；纯视觉，重复使用刷新时间。 |
 | 火球卡 | 火球 | 待上线 | 指定场上一名其他玩家的卡图，附加燃烧特效 3 分钟。 | 权重 150；卡牌 ID：`fireball-card`；纯视觉，同一目标再次使用刷新时间。 |

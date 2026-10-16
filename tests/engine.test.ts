@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import * as E from '../server/engine.js';import {cards} from './fixtures.js';
 import { ITEM_CARDS } from '../shared/item-cards.js';
-import { DRAGONMAIDS } from '../shared/dragonmaids.js';
+import { DRAGONMAID_IDS } from '../shared/dragonmaids.js';
 import { PLAYABLE_MUSIC_TRACKS, musicCandidates } from '../shared/music.js';
 function room(n=3,mode:'custom'|'random'='custom',attempts=3){const r=E.createRoom('ABCDEF','p0','p0',{mode,attempts});for(let i=1;i<n;i++)E.join(r,'p'+i,'p'+i);r.players.forEach(p=>p.ready=true);return r;}
 function setup(r:ReturnType<typeof room>,withTestCards=true){E.startRound(r,[],true);for(let i=0;i<r.entries.length;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);if(withTestCards&&r.settings.itemCards!==false)for(const e of r.entries)e.itemCards!.push({instanceId:'test-'+e.playerId,cardId:'test-card'});}
@@ -296,14 +296,18 @@ test('timed visual effects preserve answers and mask each player differently',()
 });
 test('changeover targets one card, preserves answers, refreshes and expires separately from masks',()=>{
  const r=room(3);setup(r);
+ const appearance={id:DRAGONMAID_IDS[0],name:'半龙女仆·寝室龙女',image:'https://cdn.233.momobako.com/ygopro/pics/'+DRAGONMAID_IDS[0]+'.jpg!half'};
  const answerIds=r.entries.map(e=>e.card?.cid);
  const item=r.entries[0].itemCards![0];item.cardId='changeover-card';
  assert.equal(ITEM_CARDS['changeover-card'].weight,100);
  assert.throws(()=>E.useItemCard(r,'p0',item.instanceId,r.turnId),/请选择场上有卡牌的玩家/);
  assert.throws(()=>E.useItemCard(r,'p0',item.instanceId,r.turnId,'missing'),/请选择场上有卡牌的玩家/);
- E.useItemCard(r,'p0',item.instanceId,r.turnId,'p0');
+ assert.throws(()=>E.useItemCard(r,'p0',item.instanceId,r.turnId,'p0'),/卡牌资料暂不可用/);
+ assert.equal(r.entries[0].itemCards?.length,1);
+ E.useItemCard(r,'p0',item.instanceId,r.turnId,'p0',new Set(),appearance);
  const first=r.visualEffects!.dragonmaidOutfits!.p0;
- assert(DRAGONMAIDS.some(maid=>maid.id===first.appearance.id));
+ assert(DRAGONMAID_IDS.some(id=>id===first.appearance.id));
+ assert.equal(first.appearance.image,appearance.image);
  assert(first.endsAt>Date.now()+59000);
  assert.equal(Object.keys(r.visualEffects!.dragonmaidOutfits!).length,1);
  assert.equal(E.view(r,'p0',new Set()).players[0].card,undefined);
@@ -314,7 +318,7 @@ test('changeover targets one card, preserves answers, refreshes and expires sepa
  E.useItemCard(r,'p0',mask.instanceId,r.turnId);
  r.visualEffects!.masks!.endsAt=Date.now()+120000;
  const second={instanceId:'changeover-again',cardId:'changeover-card' as const};r.entries[0].itemCards!.push(second);
- E.useItemCard(r,'p0',second.instanceId,r.turnId,'p0');
+ E.useItemCard(r,'p0',second.instanceId,r.turnId,'p0',new Set(),appearance);
  assert.notEqual(r.visualEffects?.dragonmaidOutfits?.p0.id,first.id);
  E.expireVisualEffects(r,Date.now()+60001);
  assert.equal(r.visualEffects?.dragonmaidOutfits,undefined);

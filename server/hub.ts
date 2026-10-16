@@ -5,6 +5,7 @@ import type { Command, Session, RoomState, ServerMessage, AdminRoom, Card, Drawi
 import type { Store, Audit } from './store.js';
 import type { CardProvider } from './cards.js';
 import { ITEM_CARDS } from '../shared/item-cards.js';
+import { DRAGONMAID_IDS } from '../shared/dragonmaids.js';
 import * as E from './engine.js';
 
 const base={id:z.string().min(1).max(80)};
@@ -144,8 +145,16 @@ export class Hub {
     const existing=this.roomFor(session.playerId);
     if(this.recent.has(key)||existing?.processed.some(p=>p.key===key))return;
     this.precheck(session,c);
-    let card:Card|undefined,pool:Card[]|undefined;
+    let card:Card|undefined,pool:Card[]|undefined,changeoverCard:Card|undefined;
     if(c.type==='guess'||c.type==='set-card')card=await this.cards.card(c.cardId);
+    if(c.type==='use-item-card'){
+      const r=this.requireMember(session);
+      if(r.entries.find(entry=>entry.playerId===session.playerId)?.itemCards?.some(item=>item.instanceId===c.instanceId&&item.cardId==='changeover-card')){
+        E.validateTurn(r,session.playerId,c.turnId);
+        changeoverCard=await this.cards.card(DRAGONMAID_IDS[randomInt(DRAGONMAID_IDS.length)]);
+        E.requireGame(DRAGONMAID_IDS.some(id=>id===changeoverCard!.id)&&changeoverCard.types.includes('怪兽'),'半龙女仆卡牌资料暂不可用，请稍后重试');
+      }
+    }
     if(c.type==='start'||c.type==='next'){
       const r=this.requireMember(session);
       E.requireGame(r.hostId===session.playerId,'只有房主可以执行此操作');
@@ -181,7 +190,7 @@ export class Hub {
           case 'next':host();E.startRound(r,pool);break;
           case 'set-card':E.submitCard(r,session.playerId,card!,c.setupId);break;
           case 'guess':E.guess(r,session.playerId,card!,c.turnId);break;
-          case 'use-item-card':E.useItemCard(r,session.playerId,c.instanceId,c.turnId,c.targetPlayerId,this.onlineFor(r));break;
+          case 'use-item-card':E.useItemCard(r,session.playerId,c.instanceId,c.turnId,c.targetPlayerId,this.onlineFor(r),changeoverCard);break;
           case 'drawing-close':E.requireGame(r.drawing?.id===c.drawingId&&r.drawing.drawerId===session.playerId,'只有绘画者可以关闭画板');r.drawing=undefined;E.system(r,'绘画结束，画板已关闭','item-card');break;
           case 'drawing-stroke':throw new E.GameError('绘画消息无法保存');
           case 'give-up':E.giveUp(r,session.playerId,c.turnId);break;

@@ -4,7 +4,7 @@ export interface Settings { mode: 'custom' | 'random'; attempts: number; itemCar
 export type ItemCardId = 'test-card' | 'prohibition-card' | 'maxx-c-card' | 'mask-change-card' | 'changeover-card' | 'chance-card' | 'lightning-card' | 'fireball-card' | 'outer-entity-card' | 'god-rage-card' | 'crossout-card' | 'scanner-card' | 'moon-book-card' | 'reborn-card' | 'void-card' | 'reversal-card' | 'puzzle-card' | 'combo-card' | 'hint-card' | 'stockings-card' | 'clown-card' | 'friendship-card' | 'unity-card' | 'countdown-card' | 'snatch-card' | 'flower-card' | 'mind-eye-card' | 'time-magic-card' | 'cyclone-card' | 'storm-card' | 'meteor-card' | 'ground-break-card' | 'eclipse-book-card' | 'convulsion-card' | 'music-card' | 'ecole-card';
 export interface ItemCard { id: ItemCardId; name: string; category: 'spell' | 'trap' | 'monster' | 'xyz' | 'synchro'; reference: string; image: string; description: string; timing: 'own-turn'; weight: number }
 export interface ItemCardInstance { instanceId: string; cardId: ItemCardId }
-export interface MaskAppearance { id: number; name: string; image: string }
+export interface MaskAppearance { id: number; name: string; image: string; cid?: number; types?: string; description?: string }
 export interface TimedVisualEffect { id: string; endsAt: number }
 export interface MaskVisualEffect extends TimedVisualEffect { appearances: Record<string,MaskAppearance> }
 export interface TimedCardAppearance extends TimedVisualEffect { appearance: MaskAppearance }

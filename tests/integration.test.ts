@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,readFile,writeFile} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import {request as httpRequest} from 'node:http';import {randomUUID,createHash} from 'node:crypto';import {WebSocket} from 'ws';
 import {EventEmitter} from 'node:events';
 import {SqliteStore} from '../server/store.js';import {Hub,parseCommand} from '../server/hub.js';import {FileCache} from '../server/cache.js';import {Cards} from '../server/cards.js';import {createApp} from '../server/app.js';import {FixtureCards,cards,session} from './fixtures.js';import type {Command,ServerMessage,RoomView} from '../shared/types.js';
-async function harness(){const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-test-'));const store=new SqliteStore(path.join(dir,'test.sqlite'));const hub=new Hub(store,new FixtureCards(),1);await hub.init();return {dir,store,hub,async close(){await hub.close();await store.close();}};}
+async function harness(){const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-test-'));const store=new SqliteStore(path.join(dir,'test.sqlite'));const cards=new FixtureCards();const hub=new Hub(store,cards,1);await hub.init();return {dir,store,cards,hub,async close(){await hub.close();await store.close();}};}
 const cmd=(body:any)=>({...body,id:randomUUID()}) as Command;
 async function started(h:Hub){await h.handle(session('a'),cmd({type:'create',settings:{mode:'random',attempts:3}}));const r=h.roomFor('a')!;await h.handle(session('b'),cmd({type:'join',code:r.code}));await h.handle(session('b'),cmd({type:'ready',ready:true}));await h.handle(session('a'),cmd({type:'start'}));return h.roomFor('a')!;}
 test('drawing stream is live, private to the chosen drawer, and recoverable on reconnect',async()=>{
@@ -91,11 +91,27 @@ test('changeover alone expires through the room timer and storage',async()=>{
   r.entries[0].itemCards!.push(item);
   await h.hub.handle(session('a'),cmd({type:'use-item-card',instanceId:item.instanceId,turnId:r.turnId,targetPlayerId:'a'}));
   const saved=(await h.store.loadRooms()).find(room=>room.code===r.code)!;
-  assert(saved.visualEffects?.dragonmaidOutfits?.a);
+  const appearance=saved.visualEffects?.dragonmaidOutfits?.a.appearance;
+  assert(appearance);
+  assert.equal(appearance.name,'半龙女仆·测试龙女');
+  assert.equal(appearance.image,'https://cdn.233.momobako.com/ygopro/pics/'+appearance.id+'.jpg!half');
+  assert.equal(appearance.types,'[怪兽|效果] 龙/暗');
+  assert.equal(appearance.description,'百鸽测试卡牌说明');
   h.hub.roomFor('a')!.visualEffects!.dragonmaidOutfits!.a.endsAt=Date.now()-1;
   await new Promise(resolve=>setTimeout(resolve,1200));
   assert.equal(h.hub.roomFor('a')!.visualEffects?.dragonmaidOutfits,undefined);
   assert.equal((await h.store.loadRooms()).find(room=>room.code===r.code)?.visualEffects?.dragonmaidOutfits,undefined);
+ }finally{await h.close();}
+});
+test('changeover keeps the item when the Baige card lookup fails',async()=>{
+ const h=await harness();try{
+  const r=await started(h.hub);
+  const item={instanceId:randomUUID(),cardId:'changeover-card' as const};
+  r.entries[0].itemCards!.push(item);
+  h.cards.card=async()=>{throw new Error('卡牌服务暂时不可用');};
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'use-item-card',instanceId:item.instanceId,turnId:r.turnId,targetPlayerId:'a'})),/卡牌服务暂时不可用/);
+  assert(h.hub.roomFor('a')!.entries[0].itemCards!.some(card=>card.instanceId===item.instanceId));
+  assert.equal(h.hub.roomFor('a')!.visualEffects?.dragonmaidOutfits,undefined);
  }finally{await h.close();}
 });
 test('only the host can change lobby settings and changed rules require fresh readiness',async()=>{
