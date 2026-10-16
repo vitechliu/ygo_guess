@@ -6,6 +6,8 @@ React / TypeScript / Vite 前端，Node.js / ws 服务端。本地使用文件�
 
 版本制度从 **1.0.0** 开始；当前版本以 `package.json` 的 `version` 为准。构建后的网页会在右上角以小字显示对应版本，`package-lock.json` 与其同步。`RoomState.version` 只是房间状态修订次数，不是游戏版本号。
 
+点击右上角版本号可查看更新说明。内容维护在 `client/update-notes.md`：用 `## 版本号` 开始一节，下面逐行写说明；修改后重新构建即可显示。
+
 每次更新涉及 WebSocket/HTTP 消息结构或通信行为，以及回合、猜测、计分、房间管理等核心功能时，都要在发布前推进游戏版本号。采用语义化版本：不兼容的协议或存档变更升主版本，兼容的新功能升次版本，兼容的核心修复升修订版本。只改前端样式、布局或页面文案时不需要推进版本号。使用 `npm version patch --no-git-tag-version` 同时更新 `package.json` 和锁文件；需要升次版本或主版本时，把 `patch` 换成 `minor` 或 `major`。随后构建、测试并部署；不要单独修改页面上的版本文字。
 
 ## 本地启动
