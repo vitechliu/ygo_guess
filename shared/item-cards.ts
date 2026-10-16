@@ -2,6 +2,18 @@ import type { ItemCard, ItemCardId } from './types.js';
 
 // Server-owned catalogue. Add new cards here; effects are resolved by the server engine.
 export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
+  'greed-card': {
+    id: 'greed-card', name: '强欲卡', category: 'spell', reference: '强欲之壶',
+    image: '/greed-item-card.webp', description: '随机获取 2 张道具卡。', timing: 'own-turn', weight: 50,
+  },
+  'warwolf-card': {
+    id: 'warwolf-card', name: '狼人卡', category: 'monster', reference: '科技属 狼人',
+    image: '/warwolf-item-card.webp', description: '持有这张卡牌时，你可以撒谎。（被动效果，无法主动使用）', timing: 'passive', weight: 10,
+  },
+  'moon-arrow-card': {
+    id: 'moon-arrow-card', name: '神弓卡', category: 'spell', reference: '月女神之镞',
+    image: '/moon-arrow-item-card.webp', description: '选择一名玩家，月女神之镞将会刺穿他的卡牌。', timing: 'own-turn', weight: 80,
+  },
   'test-card': {
     id: 'test-card',
     name: '测试卡',

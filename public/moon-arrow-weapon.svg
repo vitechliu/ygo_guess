@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 170" fill="none">
+<defs>
+ <linearGradient id="gold" x1="0" y1="15" x2="0" y2="145" gradientUnits="userSpaceOnUse"><stop stop-color="#fffbd2"/><stop offset=".22" stop-color="#f9d477"/><stop offset=".47" stop-color="#fff6bd"/><stop offset=".55" stop-color="#c88727"/><stop offset=".78" stop-color="#f6c25c"/><stop offset="1" stop-color="#8a4518"/></linearGradient>
+ <linearGradient id="blade"><stop stop-color="#fffde5"/><stop offset=".5" stop-color="#ffda7c"/><stop offset="1" stop-color="#bc7621"/></linearGradient>
+ <radialGradient id="gem"><stop stop-color="#fff"/><stop offset=".3" stop-color="#daffff"/><stop offset=".7" stop-color="#79c9d9"/><stop offset="1" stop-color="#316591"/></radialGradient>
+</defs>
+<!-- Long ivory-gold shaft and feathered tail -->
+<path d="M235 79 479 80 530 85 479 90 235 91Z" fill="url(#gold)" stroke="#9c6429"/>
+<path d="m449 79 29-34 39-6-29 41m-39 10 29 34 39 6-29-40" fill="url(#blade)" stroke="#d4a854" stroke-width="2"/>
+<path d="M267 83h220" stroke="#fff7d6" stroke-width="3"/>
+<!-- Swept crescent guard -->
+<path d="M253 13C208 13 161 40 143 85c18 45 65 72 110 72-32-20-45-45-45-72s13-52 45-72Z" fill="url(#gold)" stroke="#a66c2b" stroke-width="2"/>
+<path d="M244 22c-37 5-68 27-83 63 15 36 46 58 83 63-20-21-31-41-31-63s11-42 31-63Z" fill="url(#blade)"/>
+<!-- Spearhead with forked lunar wings -->
+<path d="M12 85 126 55 192 25 164 67 253 75 281 85 253 95 164 103 192 145 126 115Z" fill="url(#gold)" stroke="#9d6428" stroke-width="2" stroke-linejoin="round"/>
+<path d="m12 85 146-9 46 9-46 9Z" fill="#fff9d1"/>
+<path d="m12 85 114-30 66-30-48 49Z" fill="url(#blade)"/>
+<path d="m12 85 114 30 66 30-48-49Z" fill="#d5a13c"/>
+<path d="M28 85h162m-56-21 40-22m-40 64 40 22" stroke="#fff4be" stroke-width="2"/>
+<path d="m207 85 22-18 26 18-26 18Z" fill="#8a652d" stroke="#fff2b3" stroke-width="2"/>
+<path d="m215 85 14-12 17 12-17 12Z" fill="url(#gem)"/>
+<path d="m264 76 8 9-8 9m19-16 6 7-6 7m19-14 6 7-6 7" stroke="#a56e28" stroke-width="2"/>
+</svg>

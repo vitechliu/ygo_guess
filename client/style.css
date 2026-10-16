@@ -89,3 +89,19 @@
 .drawing-canvas.can-draw{cursor:crosshair}
 .drawing-panel p{margin:12px 2px 0;color:#566173;font-size:13px}
 @media(max-width:600px){.drawing-overlay{padding:10px}.drawing-panel{padding:12px}.drawing-heading strong{font-size:16px}}
+
+.item-passive-status{padding:10px 6px;text-align:center;border:1px solid #b78f57;border-radius:8px;background:#fff3d8;color:#805726;font-size:12px;font-weight:700}
+.moon-arrow-strike{position:absolute;inset:0;z-index:12;pointer-events:none;border-radius:inherit;overflow:visible}
+.moon-arrow-weapon{position:absolute;max-width:none!important;width:155%!important;height:auto!important;left:50%;top:49%;filter:drop-shadow(0 0 3px #fff9cf) drop-shadow(0 0 10px #ffc650);transform-origin:2.2% 50%;animation:moon-arrow-pierce 6.5s cubic-bezier(.16,.8,.2,1) both}
+.moon-arrow-trail{position:absolute;left:49%;top:49%;width:170%;height:5px;background:linear-gradient(90deg,#fffbea,#ffd36a99,transparent);box-shadow:0 0 14px #ffda76;transform:rotate(-36deg);transform-origin:left center;animation:moon-arrow-trail 6.5s ease-out both}
+.moon-arrow-rift{position:absolute;left:42%;top:41%;width:17%;height:21%;border-radius:50%;background:radial-gradient(ellipse,#182136 15%,#33233c 40%,#ffdf8c 48%,#fff9d2 53%,#e7ac4f55 64%,transparent 72%);transform:rotate(35deg);animation:moon-arrow-wound 6.5s ease-out both}
+.moon-arrow-flash{position:absolute;inset:-20%;background:radial-gradient(ellipse at center,#fffef1 0,#ffe39cbb 12%,#f6cc7544 32%,transparent 60%);animation:moon-arrow-flash 6.5s ease-out both}
+.moon-arrow-sparks{position:absolute;left:50%;top:50%;width:5px;height:5px;border-radius:50%;background:#fff4c6;box-shadow:-47px -42px 3px #ffe0a2,35px -60px 2px #fff8d1,-56px 27px 2px #ffce6c,53px 33px 3px #ffdd8a,13px 65px 2px #ffdc78,-20px -77px 2px #fff6c6,74px -9px 2px #ffe3a2;animation:moon-arrow-sparks 6.5s ease-out both}
+.moon-arrow-impact-card{animation:moon-arrow-shake 6.5s linear both}
+@keyframes moon-arrow-pierce{0%,7%{opacity:0;transform:translate(100%,-220%) rotate(-36deg) scale(.85)}12%{opacity:1;transform:translate(65%,-180%) rotate(-36deg) scale(1)}23%{opacity:1;transform:translate(-2.2%,-50%) rotate(-36deg) scale(1)}26%{transform:translate(-6%,-47%) rotate(-36deg) scale(1)}30%,78%{opacity:1;transform:translate(-2.2%,-50%) rotate(-36deg) scale(1)}95%,100%{opacity:0;transform:translate(-2.2%,-50%) rotate(-36deg) scale(1)}}
+@keyframes moon-arrow-trail{0%,10%,35%,100%{opacity:0}19%,23%{opacity:1}28%{opacity:.3}}
+@keyframes moon-arrow-flash{0%,20%,38%,100%{opacity:0;transform:scale(.6)}23%{opacity:1;transform:scale(1.2)}29%{opacity:.5;transform:scale(1.5)}}
+@keyframes moon-arrow-wound{0%,21%{opacity:0;scale:.1}27%,80%{opacity:1;scale:1}100%{opacity:0;scale:.8}}
+@keyframes moon-arrow-sparks{0%,21%{opacity:0;transform:scale(.1)}24%{opacity:1;transform:scale(.6)}45%{opacity:0;transform:scale(1.8)}100%{opacity:0}}
+@keyframes moon-arrow-shake{0%,21%,38%,100%{transform:none}23%{transform:translate(-8px,6px) rotate(-3deg)}25%{transform:translate(7px,-5px) rotate(2.5deg)}27%{transform:translate(-6px,4px) rotate(-2deg)}29%{transform:translate(5px,-3px) rotate(1.5deg)}31%{transform:translate(-3px,2px) rotate(-1deg)}34%{transform:translate(2px,-1px)}}
+@media(prefers-reduced-motion:reduce){.moon-arrow-impact-card{animation:none}.moon-arrow-trail,.moon-arrow-flash,.moon-arrow-sparks{display:none}.moon-arrow-weapon{animation:none;transform:translate(-2.2%,-50%) rotate(-36deg)}.moon-arrow-rift{animation:none}}

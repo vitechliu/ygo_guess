@@ -85,7 +85,7 @@ export function expireVisualEffects(r:RoomState,now=Date.now()) {
     for(const [playerId,effect] of Object.entries(r.visualEffects.clownNames))if(effect.endsAt<=now){delete r.visualEffects.clownNames[playerId];changed=true;}
     if(!Object.keys(r.visualEffects.clownNames).length)delete r.visualEffects.clownNames;
   }
-  for(const key of ['cyclones','meteors','cracks'] as const){
+  for(const key of ['cyclones','meteors','moonArrows','cracks'] as const){
     const effects=r.visualEffects[key];
     if(!effects)continue;
     for(const [playerId,effect] of Object.entries(effects))if(effect.endsAt<=now){delete effects[playerId];changed=true;}
@@ -182,7 +182,7 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
   else if(card.id==='snatch-card')requireGame(target&&target.playerId!==id&&target.status==='playing'&&target.attempts>=2&&members(r).some(p=>p.id===targetPlayerId),'请选择至少还有 2 次猜测机会的其他玩家');
   else if(card.id==='clown-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&members(r).some(p=>p.id===targetPlayerId),'请选择本局的其他玩家');
   else if(card.id==='fireball-card'||card.id==='god-rage-card'||card.id==='moon-book-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&target.card&&members(r).some(p=>p.id===targetPlayerId),'请选择场上有卡牌的其他玩家');
-  else if(card.id==='cyclone-card'||card.id==='changeover-card')requireGame(target&&target.status!=='left'&&target.card&&members(r).some(p=>p.id===targetPlayerId),'请选择场上有卡牌的玩家');
+  else if(card.id==='moon-arrow-card'||card.id==='cyclone-card'||card.id==='changeover-card')requireGame(target&&target.status!=='left'&&target.card&&members(r).some(p=>p.id===targetPlayerId),'请选择场上有卡牌的玩家');
   else if(card.id==='reborn-card')requireGame(target&&target.playerId!==id&&target.status==='failed'&&target.failedByGuess&&target.attempts===0&&members(r).some(p=>p.id===targetPlayerId)&&online.has(targetPlayerId!),'请选择在线且因猜测次数用完而失败的其他玩家');
   else if(card.id==='hint-card'||card.id==='ecole-card')requireGame(target&&target.playerId!==id&&target.status!=='left'&&members(r).some(p=>p.id===targetPlayerId)&&online.has(targetPlayerId!),'请选择在线的其他玩家');
   else requireGame(!targetPlayerId,'这张道具卡不需要指定玩家');
@@ -193,6 +193,15 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
   e.itemCards!.splice(index,1);
   const name=r.players.find(p=>p.id===id)!.name;
   switch(card.id){
+    case 'greed-card':
+      for(let i=0;i<2;i++)e.itemCards!.push({instanceId:randomUUID(),cardId:drawItemCard()});
+      system(r,name+'使用了强欲卡，随机获得了 2 张道具卡','item-card');
+      break;
+    case 'moon-arrow-card':
+      r.visualEffects??={};r.visualEffects.moonArrows??={};
+      r.visualEffects.moonArrows[targetPlayerId!]={id:randomUUID(),endsAt:Date.now()+6500};
+      system(r,name+'对 '+r.players.find(p=>p.id===targetPlayerId)!.name+' 使用了神弓卡，月女神之镞刺穿了卡牌','item-card');
+      break;
     case 'prohibition-card':
       target!.skipNextTurns=(target!.skipNextTurns??0)+1;
       system(r,name+'对 '+r.players.find(p=>p.id===targetPlayerId)!.name+' 使用了禁止卡，下次回合将被跳过','item-card');
