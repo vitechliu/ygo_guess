@@ -1,0 +1,8 @@
+.outer-entity-image{position:relative;display:block;width:100%;height:100%;overflow:hidden;isolation:isolate;animation:outer-entity-breath 10s ease-in-out infinite;animation-play-state:paused}
+.outer-entity-defs{position:absolute;left:0;top:0;pointer-events:none;overflow:hidden}
+.outer-entity-surface{display:block;width:100%;height:100%;transform:scale(1.055)}
+.outer-entity-gaze{position:absolute;inset:-12%;pointer-events:none;background:radial-gradient(ellipse at 42% 43%,transparent 17%,#22103930 49%,#090414bd 76%),radial-gradient(ellipse at 70% 24%,#9a62be25,transparent 46%);opacity:.55;animation:outer-entity-gaze 10s ease-in-out infinite;animation-delay:inherit;animation-play-state:paused}
+.outer-entity-image[data-running=true],.outer-entity-image[data-running=true] .outer-entity-gaze{animation-play-state:running}
+@keyframes outer-entity-breath{0%,35%,100%{transform:scale(1) skew(0deg)}12%{transform:scale(.975,1.025) skew(-1.2deg,.7deg)}23%{transform:scale(1.025,.98) skew(.9deg,-.6deg)}65%{transform:scale(1.008,.995)}}
+@keyframes outer-entity-gaze{0%,35%,100%{opacity:.48;transform:translate(0,0) scale(1)}15%{opacity:.9;transform:translate(3%,-2%) scale(1.06,.96)}25%{opacity:.7;transform:translate(-2%,3%) scale(.97,1.04)}70%{opacity:.6;transform:translate(-1%,1%)}}
+@media(prefers-reduced-motion:reduce){.outer-entity-image,.outer-entity-gaze{animation:none!important}}
