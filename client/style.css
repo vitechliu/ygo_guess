@@ -105,3 +105,5 @@
 @keyframes moon-arrow-sparks{0%,21%{opacity:0;transform:scale(.1)}24%{opacity:1;transform:scale(.6)}45%{opacity:0;transform:scale(1.8)}100%{opacity:0}}
 @keyframes moon-arrow-shake{0%,21%,38%,100%{transform:none}23%{transform:translate(-8px,6px) rotate(-3deg)}25%{transform:translate(7px,-5px) rotate(2.5deg)}27%{transform:translate(-6px,4px) rotate(-2deg)}29%{transform:translate(5px,-3px) rotate(1.5deg)}31%{transform:translate(-3px,2px) rotate(-1deg)}34%{transform:translate(2px,-1px)}}
 @media(prefers-reduced-motion:reduce){.moon-arrow-impact-card{animation:none}.moon-arrow-trail,.moon-arrow-flash,.moon-arrow-sparks{display:none}.moon-arrow-weapon{animation:none;transform:translate(-2.2%,-50%) rotate(-36deg)}.moon-arrow-rift{animation:none}}
+
+.initial-drawing-target{display:flex;align-items:center;gap:16px;margin-bottom:12px}.initial-drawing-target img{width:60px;height:88px;object-fit:contain}.initial-drawing-target p{margin:6px 0;color:var(--muted-foreground)}.drawing-view-dialog{width:min(900px,calc(100vw - 32px));max-width:900px}.drawing-view-dialog .drawing-canvas{width:100%;height:auto}.card-caption>button{margin-bottom:8px}

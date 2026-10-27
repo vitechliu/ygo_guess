@@ -1,6 +1,6 @@
 export interface Card { id: number; cid: number; name: string; types: string; description: string; image: string }
-export type Phase = 'lobby' | 'setting' | 'guessing' | 'round-end' | 'match-end' | 'closed';
-export interface Settings { mode: 'custom' | 'random'; attempts: number; itemCards?: boolean }
+export type Phase = 'lobby' | 'setting' | 'drawing' | 'guessing' | 'round-end' | 'match-end' | 'closed';
+export interface Settings { mode: 'custom' | 'random'; attempts: number; itemCards?: boolean; initialDrawing?: boolean }
 export type ItemCardId = 'greed-card' | 'warwolf-card' | 'moon-arrow-card' | 'test-card' | 'prohibition-card' | 'maxx-c-card' | 'mask-change-card' | 'changeover-card' | 'chance-card' | 'lightning-card' | 'fireball-card' | 'outer-entity-card' | 'god-rage-card' | 'crossout-card' | 'scanner-card' | 'moon-book-card' | 'reborn-card' | 'void-card' | 'reversal-card' | 'puzzle-card' | 'combo-card' | 'hint-card' | 'stockings-card' | 'clown-card' | 'friendship-card' | 'unity-card' | 'countdown-card' | 'snatch-card' | 'flower-card' | 'mind-eye-card' | 'time-magic-card' | 'cyclone-card' | 'storm-card' | 'meteor-card' | 'ground-break-card' | 'eclipse-book-card' | 'convulsion-card' | 'music-card' | 'ecole-card';
 export interface ItemCard { id: ItemCardId; name: string; category: 'spell' | 'trap' | 'monster' | 'xyz' | 'synchro'; reference: string; image: string; description: string; timing: 'own-turn' | 'passive'; weight: number }
 export interface ItemCardInstance { instanceId: string; cardId: ItemCardId }
@@ -16,11 +16,12 @@ export interface Chat { id: string; name: string; playerId?: string; recipientPl
 export interface RoundResult { round: number; entries: Entry[] }
 export interface RoomMusic { activationId: string; trackId: string }
 export interface DrawingSession { id: string; userId: string; drawerId: string }
+export interface InitialDrawing extends DrawingSession { strokes: DrawingStroke[]; submitted: boolean }
 export type DrawingPoint = [number, number];
 export interface DrawingStroke { points: DrawingPoint[] }
-export interface RoomState { code: string; hostId: string; settings: Settings; phase: Phase; round: number; players: Player[]; entries: Entry[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; history: RoundResult[]; processed: { key: string; at: number }[]; createdAt: number; lastActivityAt?: number; visualEffects?: VisualEffects; finalCountdown?: FinalCountdown; music?: RoomMusic; drawing?: DrawingSession }
+export interface RoomState { code: string; hostId: string; settings: Settings; phase: Phase; round: number; players: Player[]; entries: Entry[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; history: RoundResult[]; processed: { key: string; at: number }[]; createdAt: number; lastActivityAt?: number; visualEffects?: VisualEffects; finalCountdown?: FinalCountdown; music?: RoomMusic; drawing?: DrawingSession; initialDrawings?: InitialDrawing[] }
 export interface PlayerView extends Player { online: boolean; waiting: boolean; status?: Entry['status']; attempts: number; turns: number; points: number; card?: Card; submitted: boolean; failedByGuess?: boolean }
-export interface RoomView { code: string; hostId: string; settings: Settings; phase: Phase; round: number; players: PlayerView[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; selfId: string; nextPlayerName?: string; mySubmittedCard?: Card; myItemCards: ItemCardInstance[]; history: RoundResult[]; visualEffects?: VisualEffects; reversalActive?: boolean; finalCountdownRemainingTurns?: number; debugEnabled?: boolean; music?: RoomMusic; drawing?: DrawingSession; drawingStrokes?: DrawingStroke[] }
+export interface RoomView { code: string; hostId: string; settings: Settings; phase: Phase; round: number; players: PlayerView[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; selfId: string; nextPlayerName?: string; mySubmittedCard?: Card; myItemCards: ItemCardInstance[]; history: RoundResult[]; visualEffects?: VisualEffects; reversalActive?: boolean; finalCountdownRemainingTurns?: number; debugEnabled?: boolean; music?: RoomMusic; drawing?: DrawingSession; drawingStrokes?: DrawingStroke[]; initialDrawingCard?: Card; initialDrawings?: InitialDrawing[]; drawingProgress?: { completed: number; total: number } }
 export interface AdminRoom { code: string; phase: Phase; round: number; hostId: string; turnId: string; turnPlayerId: string | null; players: { id: string; name: string; online: boolean }[] }
 export interface Session { playerId: string; name: string; admin: boolean; expiresAt: number }
 export type Command =

@@ -1,5 +1,5 @@
 import { randomUUID, randomInt } from 'node:crypto';
-import type { Card, RoomState, RoomView, Settings, Entry, ItemCardId, Chat, Command, MaskAppearance } from '../shared/types.js';
+import type { Card, RoomState, RoomView, Settings, Entry, ItemCardId, Chat, Command, MaskAppearance, DrawingPoint } from '../shared/types.js';
 import { ITEM_CARDS } from '../shared/item-cards.js';
 import { PLAYABLE_MUSIC_TRACKS, musicCandidates } from '../shared/music.js';
 import { MASKED_HEROES } from '../shared/masked-heroes.js';
@@ -95,6 +95,7 @@ export function expireVisualEffects(r:RoomState,now=Date.now()) {
 }
 export function system(r: RoomState, text: string, kind?: Chat['kind'], recipientPlayerId?:string) { r.chat.push({id:randomUUID(),name:'房间消息',text,time:Date.now(),system:true,...(kind?{kind}:{}),...(recipientPlayerId?{recipientPlayerId}:{})}); r.chat=r.chat.slice(-100); }
 export function createRoom(code: string, playerId: string, name: string, settings: Settings): RoomState {
+  requireGame(!settings.initialDrawing||settings.mode==='custom','初始画猜仅支持好友出题');
   return {code,hostId:playerId,settings,phase:'lobby',round:0,players:[{id:playerId,name,seat:0,score:0,ready:false,left:false}],entries:[],turnPlayerId:null,turnId:'',setupId:'',version:0,chat:[],history:[],processed:[],createdAt:Date.now(),lastActivityAt:Date.now()};
 }
 export function join(r: RoomState, id: string, name: string) {
@@ -109,10 +110,11 @@ export function join(r: RoomState, id: string, name: string) {
 }
 export function updateSettings(r:RoomState,settings:Settings) {
   requireGame(r.phase==='lobby','比赛开始后不能修改设置');
-  if(r.settings.mode===settings.mode&&r.settings.attempts===settings.attempts&&(r.settings.itemCards??true)===(settings.itemCards??true))return;
+  requireGame(!settings.initialDrawing||settings.mode==='custom','初始画猜仅支持好友出题');
+  if((r.settings.initialDrawing??false)===(settings.initialDrawing??false)&&r.settings.mode===settings.mode&&r.settings.attempts===settings.attempts&&(r.settings.itemCards??true)===(settings.itemCards??true))return;
   r.settings=settings;
   for(const p of members(r))if(p.id!==r.hostId)p.ready=false;
-  system(r,'房主修改了规则：'+(settings.mode==='custom'?'好友出题':'随机分配')+' · 每局 '+settings.attempts+' 次猜测 · 道具卡'+(settings.itemCards===false?'关闭':'开启')+'。请重新准备');
+  system(r,'房主修改了规则：'+(settings.mode==='custom'?'好友出题':'随机分配')+' · 每局 '+settings.attempts+' 次猜测 · 道具卡'+(settings.itemCards===false?'关闭':'开启')+(settings.initialDrawing?' · 初始画猜开启':'')+'。请重新准备');
 }
 export function shuffleSeats(r:RoomState) {
   requireGame(r.phase==='lobby','比赛开始后不能打乱顺序');
@@ -134,6 +136,7 @@ export function startRound(r: RoomState, pool: Card[] = [], first = false) {
     requireGame(ps.every(p=>p.id===r.hostId||p.ready),'等待所有非房主玩家准备');
   } else requireGame(r.phase==='round-end','当前不能进入下一局');
   if(r.settings.mode==='random') requireGame(new Set(pool.map(c=>c.cid)).size>=ps.length,'精选题库未配置或有效卡牌不足，请配置题库或使用出题模式');
+  r.initialDrawings=undefined;
   r.round++; r.setupId=randomUUID(); r.turnPlayerId=null; r.turnId='';r.visualEffects={};r.finalCountdown=undefined;r.music=undefined;r.drawing=undefined;
   r.entries=ps.map(p=>({playerId:p.id,submitted:false,status:'playing',attempts:r.settings.attempts,turns:0,points:0,itemCards:[]}));
   if(r.settings.mode==='random') {
@@ -150,10 +153,31 @@ export function submitCard(r: RoomState, id: string, card: Card, setupId: string
   requireGame(!r.entries[index].submitted,'本局出题已提交');
   r.entries[(index+1)%r.entries.length].card=card;
   r.entries[index].submitted=true;
-  if(r.entries.every(e=>e.submitted)) { beginGuessing(r); system(r,'所有人已出题，猜卡开始'); }
+  if(r.entries.every(e=>e.submitted)) {
+    if(r.settings.mode==='custom'&&r.settings.initialDrawing){
+      r.phase='drawing';
+      r.initialDrawings=r.entries.map((entry,index)=>({id:randomUUID(),drawerId:entry.playerId,userId:r.entries[(index+r.entries.length-1)%r.entries.length].playerId,strokes:[],submitted:false}));
+      system(r,'所有人已出题，请为上家绘画，全部提交后开始猜卡');
+    } else { beginGuessing(r); system(r,'所有人已出题，猜卡开始'); }
+  }
+}
+export function completeInitialDrawing(r:RoomState,id:string,drawingId:string) {
+  const drawing=r.initialDrawings?.find(d=>d.id===drawingId&&d.drawerId===id&&!d.submitted);
+  requireGame(r.phase==='drawing'&&drawing,'当前不能提交画作');
+  drawing.submitted=true;
+  if(r.initialDrawings!.every(d=>d.submitted)){beginGuessing(r);system(r,'所有人已完成绘画，猜卡开始');}
+}
+export function addInitialDrawingStroke(r:RoomState,id:string,drawingId:string,points:DrawingPoint[],continuation:boolean) {
+  const drawing=r.initialDrawings?.find(d=>d.id===drawingId&&d.drawerId===id&&!d.submitted);
+  requireGame(r.phase==='drawing'&&drawing,'当前不能绘画');
+  requireGame(drawing.strokes.reduce((n,s)=>n+s.points.length,0)+points.length<=12000,'画板已达到笔画上限，请提交画作');
+  requireGame(!continuation||drawing.strokes.length>0,'笔画已失效，请重新落笔');
+  if(continuation)drawing.strokes.at(-1)!.points.push(...points);
+  else {requireGame(drawing.strokes.length<500,'画板已达到笔画上限，请提交画作');drawing.strokes.push({points:[...points]});}
 }
 function beginGuessing(r: RoomState) {
-  r.phase='guessing'; const entry=r.entries[(r.round-1)%r.entries.length];
+  const entries=r.entries.filter(e=>e.status!=='left');
+  r.phase='guessing'; const entry=entries[(r.round-1)%entries.length];
   activate(r,entry);
 }
 function activate(r: RoomState,e: Entry) {
@@ -468,6 +492,11 @@ export function leave(r:RoomState,id:string,online:Set<string>,removedBy?:'房�
     if(eligible.length<2) { finishRound(r,true); return; }
     r.entries=eligible.map(e=>({...e,card:undefined,submitted:false}));
     r.setupId=randomUUID(); system(r,'成员发生变化，请重新为下家出题');
+  } else if(r.phase==='drawing'&&e) {
+    r.initialDrawings=r.initialDrawings?.filter(d=>d.userId!==id);
+    for(const d of r.initialDrawings??[])if(d.drawerId===id)d.submitted=true;
+    if(r.entries.filter(entry=>entry.status!=='left').length<2)finishRound(r,true);
+    else if(r.initialDrawings?.every(d=>d.submitted)){beginGuessing(r);system(r,'绘画完成，猜卡开始');}
   } else if(r.phase==='guessing') {
     if(r.entries.filter(entry=>remaining.some(p=>p.id===entry.playerId)).length<2)finishRound(r,true);
     else if(r.turnPlayerId===id)advance(r);
@@ -477,6 +506,7 @@ export function view(r:RoomState,selfId:string,online:Set<string>,debugEnabled=f
   const index=r.entries.findIndex(e=>e.playerId===selfId);
   const participant=index>=0&&r.entries[index].status!=='left'&&!r.players.find(p=>p.id===selfId)?.left;
   const reveal=r.phase==='round-end'||r.phase==='match-end';
+  const initial=r.phase==='drawing'&&participant?r.initialDrawings?.find(d=>d.drawerId===selfId&&!d.submitted):undefined;
   const next=participant?r.entries[(index+1)%r.entries.length]:undefined;
   return {code:r.code,hostId:r.hostId,settings:r.settings,phase:r.phase,round:r.round,turnPlayerId:r.turnPlayerId,turnId:r.turnId,setupId:r.setupId,version:r.version,selfId,
     players:r.players.map(p=>{
@@ -484,7 +514,9 @@ export function view(r:RoomState,selfId:string,online:Set<string>,debugEnabled=f
       return {...p,name:(r.visualEffects?.clownNames?.[p.id]?.endsAt??0)>Date.now()?'🤡':p.name,online:online.has(p.id),waiting:r.phase!=='lobby'&&(!e||e.status==='left')&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,failedByGuess:e?.failedByGuess??false,
         ...(e?.card&&(reveal||(r.phase==='guessing'&&(!participant||p.id!==selfId||e.status==='solved')))?{card:e.card}:{})};
     }),
-    chat:r.chat.filter(message=>!message.recipientPlayerId||message.recipientPlayerId===selfId),myItemCards:participant?(r.entries[index].itemCards??[]):[],visualEffects:r.visualEffects,reversalActive:participant&&r.turnPlayerId===selfId&&r.entries[index].reversalTurnId===r.turnId,finalCountdownRemainingTurns:r.finalCountdown?.remainingTurns,debugEnabled,music:r.music,drawing:r.drawing,
+    chat:r.chat.filter(message=>!message.recipientPlayerId||message.recipientPlayerId===selfId),myItemCards:participant?(r.entries[index].itemCards??[]):[],visualEffects:r.visualEffects,reversalActive:participant&&r.turnPlayerId===selfId&&r.entries[index].reversalTurnId===r.turnId,finalCountdownRemainingTurns:r.finalCountdown?.remainingTurns,debugEnabled,music:r.music,drawing:initial?{id:initial.id,userId:initial.userId,drawerId:initial.drawerId}:r.drawing,
+    ...(initial?{drawingStrokes:initial.strokes,initialDrawingCard:r.entries.find(e=>e.playerId===initial.userId)?.card}:{}),
+    ...(r.initialDrawings?{drawingProgress:{completed:r.initialDrawings.filter(d=>d.submitted).length,total:r.initialDrawings.length},...((r.phase==='guessing'||reveal)?{initialDrawings:r.initialDrawings}:{})}:{}),
     ...(r.phase==='setting'&&participant?{nextPlayerName:r.players.find(p=>p.id===next?.playerId)?.name,mySubmittedCard:r.entries[index].submitted?next?.card:undefined}:{}),
     history:participant?r.history.map(result=>({round:result.round,entries:result.entries.map(({itemCards,...entry})=>entry)})):[]};
 }

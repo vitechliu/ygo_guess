@@ -277,3 +277,43 @@ test('real HTTP and WebSocket transport, origin guard, admin cookie and reconnec
  cb.ws.close();await new Promise(r=>setTimeout(r,40));await app.hub.transferOfflineHosts();await new Promise(r=>setTimeout(r,10));await app.hub.transferOfflineHosts();assert.equal(app.hub.roomFor(a.session.playerId)!.hostId,a.session.playerId);
  }finally{for(const ws of sockets)ws.terminate();await app.close();await h.store.close();}
 });
+
+test('initial artwork streams only to its drawer, survives restart, and stays available when guessing',async()=>{
+ const h=await harness();
+ class Socket extends EventEmitter {
+  readyState:number=WebSocket.OPEN;
+  messages:ServerMessage[]=[];
+  send(data:string){this.messages.push(JSON.parse(data));}
+  close(){this.readyState=WebSocket.CLOSED;this.emit('close');}
+ }
+ let restarted:Hub|undefined;
+ try{
+  await h.hub.handle(session('a'),cmd({type:'create',settings:{mode:'custom',attempts:3,initialDrawing:true}}));
+  const code=h.hub.roomFor('a')!.code;
+  for(const id of ['b','c']){
+   await h.hub.handle(session(id),cmd({type:'join',code}));
+   await h.hub.handle(session(id),cmd({type:'ready',ready:true}));
+  }
+  await h.hub.handle(session('a'),cmd({type:'start'}));
+  const setupId=h.hub.roomFor('a')!.setupId;
+  for(const [i,id] of ['a','b','c'].entries())await h.hub.handle(session(id),cmd({type:'set-card',cardId:cards[i].id,setupId}));
+  const a=new Socket(),b=new Socket();h.hub.attach(a as unknown as WebSocket,session('a'));h.hub.attach(b as unknown as WebSocket,session('b'));
+  const drawingId=h.hub.roomFor('a')!.initialDrawings![0].id;
+  const stroke=cmd({type:'drawing-stroke',drawingId,points:[[10,20],[80,90]],continuation:false});
+  a.emit('message',Buffer.from(JSON.stringify(stroke)));await new Promise(resolve=>setImmediate(resolve));
+  assert(a.messages.some(m=>m.type==='drawing-stroke'&&m.drawingId===drawingId));
+  assert(!b.messages.some(m=>m.type==='drawing-stroke'&&m.drawingId===drawingId));
+  b.emit('message',Buffer.from(JSON.stringify({...stroke,id:randomUUID()})));await new Promise(resolve=>setImmediate(resolve));
+  assert(b.messages.some(m=>m.type==='error'&&m.message==='当前不能绘画'));
+  await h.hub.close();
+  restarted=new Hub(h.store,new FixtureCards());await restarted.init();
+  assert.equal(restarted.roomFor('a')!.settings.initialDrawing,true);
+  const reconnected=new Socket();restarted.attach(reconnected as unknown as WebSocket,session('a'));
+  const snapshot=reconnected.messages.find(m=>m.type==='snapshot');assert(snapshot?.type==='snapshot');
+  assert.deepEqual(snapshot.room?.drawingStrokes,[{points:[[10,20],[80,90]]}]);
+  for(const d of restarted.roomFor('a')!.initialDrawings!)await restarted.handle(session(d.drawerId),cmd({type:'drawing-close',drawingId:d.id}));
+  const saved=(await h.store.loadRooms()).find(r=>r.code===code)!;
+  assert.equal(saved.phase,'guessing');assert.deepEqual(saved.initialDrawings![0].strokes,[{points:[[10,20],[80,90]]}]);
+  reconnected.close();
+ }finally{await restarted?.close();await h.close();}
+});

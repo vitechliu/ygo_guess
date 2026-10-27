@@ -36,8 +36,17 @@ function paint(context:CanvasRenderingContext2D,strokes:DrawingStroke[]){
   }
 }
 
+export function DrawingPreview({strokes}:{strokes:DrawingStroke[]}){
+  const canvas=useRef<HTMLCanvasElement>(null);
+  useEffect(()=>{const context=canvas.current?.getContext('2d');if(context)paint(context,strokes);},[strokes]);
+  return <canvas ref={canvas} width={WIDTH} height={HEIGHT} className="drawing-canvas" aria-label="画作提示"/>;
+}
+
 export function DrawingBoard({room,send,connected}:{room:RoomView;send:Send;connected:boolean}){
   const drawing=room.drawing;
+  const initial=room.phase==='drawing';
+  const inflight=useRef<Set<Promise<boolean>>>(new Set());
+  const syncFailed=useRef(false);
   const canvas=useRef<HTMLCanvasElement>(null);
   const pending=useRef<DrawingPoint[]>([]);
   const lastSent=useRef<DrawingPoint|null>(null);
@@ -62,7 +71,10 @@ export function DrawingBoard({room,send,connected}:{room:RoomView;send:Send;conn
     lastSent.current=points.at(-1)!;
     pending.current=[];
     if(continuation)reduced.shift();
-    if(reduced.length)void send({type:'drawing-stroke',drawingId:drawing.id,points:reduced,continuation}).then(()=>setWarning('')).catch(error=>setWarning(error instanceof Error?error.message:'笔画未同步，请重试'));
+    if(reduced.length){
+      const task=send({type:'drawing-stroke',drawingId:drawing.id,points:reduced,continuation}).then(()=>{setWarning('');return true;}).catch(error=>{syncFailed.current=true;setWarning(error instanceof Error?error.message:'笔画未同步，请重试');return false;});
+      inflight.current.add(task);void task.finally(()=>inflight.current.delete(task));
+    }
   };
   const schedule=()=>{if(!timer.current)timer.current=setTimeout(flush,80);};
   const end=(event:React.PointerEvent<HTMLCanvasElement>)=>{
@@ -72,11 +84,12 @@ export function DrawingBoard({room,send,connected}:{room:RoomView;send:Send;conn
   };
   const userName=room.players.find(player=>player.id===drawing.userId)?.name??'使用者';
   const drawerName=room.players.find(player=>player.id===drawing.drawerId)?.name??'玩家';
-  return <div className="drawing-overlay" role="dialog" aria-modal="true" aria-label="忘我卡画板">
+  return <div className="drawing-overlay" role="dialog" aria-modal="true" aria-label={initial?'初始画猜画板':'忘我卡画板'}>
     <div className="drawing-panel">
-      <div className="drawing-heading"><div><strong>忘我卡 · 绘画提示</strong><span>{drawer?`请为 ${userName} 画出卡牌线索`:`${drawerName} 正在为 ${userName} 绘画`}</span></div>{drawer&&<button type="button" disabled={!connected||busy} onClick={async()=>{flush();setBusy(true);try{await send({type:'drawing-close',drawingId:drawing.id});}catch{}finally{setBusy(false);}}}>关闭画板</button>}</div>
-      <canvas ref={canvas} width={WIDTH} height={HEIGHT} className={drawer&&connected?'drawing-canvas can-draw':'drawing-canvas'} aria-label="共享画板" onPointerDown={event=>{if(!drawer||!connected||pointerId.current!==null)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);pointerId.current=event.pointerId;pending.current=[point(event)];lastSent.current=null;schedule();}} onPointerMove={event=>{if(pointerId.current!==event.pointerId)return;const next=point(event);const previous=pending.current.at(-1)??lastSent.current;if(!previous||Math.hypot(next[0]-previous[0],next[1]-previous[1])>=2){pending.current.push(next);if(pending.current.length>=32)flush();else schedule();}}} onPointerUp={end} onPointerCancel={end}/>
-      <p>{warning|| (drawer?'用一支笔画线，完成后点击“关闭画板”。':'画面会实时同步给房间里的所有人。')}</p>
+      <div className="drawing-heading"><div><strong>{initial?'初始画猜 · 为上家绘画':'忘我卡 · 绘画提示'}</strong><span>{drawer?`请为 ${userName} 画出卡牌线索`:`${drawerName} 正在为 ${userName} 绘画`}</span></div>{drawer&&<button type="button" disabled={!connected||busy} onClick={async()=>{flush();setBusy(true);try{if(initial){await Promise.all(inflight.current);if(syncFailed.current){setWarning('部分笔画未同步，请刷新画板确认后再提交');return;}}await send({type:'drawing-close',drawingId:drawing.id});}catch{}finally{setBusy(false);}}}>{initial?'提交画作':'关闭画板'}</button>}</div>
+      {initial&&room.initialDrawingCard&&<div className="initial-drawing-target"><img src={room.initialDrawingCard.image} alt={room.initialDrawingCard.name}/><div><strong>{userName} 的题目：{room.initialDrawingCard.name}</strong><p>请画出线索，不要直接写出卡名。</p></div></div>}
+      <canvas ref={canvas} width={WIDTH} height={HEIGHT} className={drawer&&connected?'drawing-canvas can-draw':'drawing-canvas'} aria-label="共享画板" onPointerDown={event=>{if(!drawer||!connected||busy||pointerId.current!==null)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);pointerId.current=event.pointerId;pending.current=[point(event)];lastSent.current=null;schedule();}} onPointerMove={event=>{if(pointerId.current!==event.pointerId)return;const next=point(event);const previous=pending.current.at(-1)??lastSent.current;if(!previous||Math.hypot(next[0]-previous[0],next[1]-previous[1])>=2){pending.current.push(next);if(pending.current.length>=32)flush();else schedule();}}} onPointerUp={end} onPointerCancel={end}/>
+      <p>{warning|| (initial?'为上家画出线索，完成后点击“提交画作”，等待所有人完成。':drawer?'用一支笔画线，完成后点击“关闭画板”。':'画面会实时同步给房间里的所有人。')}</p>
     </div>
   </div>;
 }

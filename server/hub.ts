@@ -15,7 +15,7 @@ function lastActivity(room:RoomState){
   return room.lastActivityAt??Math.max(room.createdAt,...room.processed.map(p=>p.at),...room.chat.filter(m=>!m.system).map(m=>m.time));
 }
 const code=z.string().regex(/^[A-Z2-9]{6}$/), playerId=z.string().max(64), turnId=z.string().uuid();
-const settings=z.object({mode:z.enum(['custom','random']),attempts:z.number().int().min(1).max(10),itemCards:z.boolean().default(true)});
+const settings=z.object({mode:z.enum(['custom','random']),attempts:z.number().int().min(1).max(10),itemCards:z.boolean().default(true),initialDrawing:z.boolean().default(false)});
 const debugCardId=z.custom<keyof typeof ITEM_CARDS>(value=>typeof value==='string'&&Object.hasOwn(ITEM_CARDS,value));
 const schemas=[
   z.object({...base,type:z.literal('create'),settings}),
@@ -56,7 +56,7 @@ export class Hub {
     for(const r of await this.store.loadRooms()){
       // Rooms saved before unlimited rounds may be at their old match boundary.
       if(r.phase==='match-end')r.phase='round-end';
-      r.settings={mode:r.settings.mode,attempts:r.settings.attempts,itemCards:r.settings.itemCards};
+      r.settings={mode:r.settings.mode,attempts:r.settings.attempts,itemCards:r.settings.itemCards,initialDrawing:r.settings.mode==='custom'&&r.settings.initialDrawing};
       this.rooms.set(r.code,r);
     }
     await this.cleanupRooms();
@@ -102,6 +102,12 @@ export class Hub {
   private handleDrawingStroke(session:Session,c:Extract<Command,{type:'drawing-stroke'}>){
     E.requireGame(session.expiresAt>Date.now(),'会话已过期');
     const room=this.roomFor(session.playerId);
+    if(room?.phase==='drawing'){
+      E.addInitialDrawingStroke(room,session.playerId,c.drawingId,c.points,c.continuation);
+      this.drawingActivity.set(room.code,Date.now());
+      for(const client of this.clients)if(client.session.playerId===session.playerId)this.send(client.ws,{type:'drawing-stroke',drawingId:c.drawingId,points:c.points,continuation:c.continuation});
+      return;
+    }
     E.requireGame(room?.phase==='guessing'&&room.drawing?.id===c.drawingId&&room.drawing.drawerId===session.playerId,'当前不能绘画');
     let drawing=this.drawings.get(room.code);
     if(!drawing||drawing.id!==c.drawingId){drawing={id:c.drawingId,strokes:[],pointCount:0};this.drawings.set(room.code,drawing);}
@@ -119,7 +125,7 @@ export class Hub {
       if(c.session.expiresAt<=Date.now()){c.ws.close(1008,'会话已过期');continue;}
       const r=this.roomFor(c.session.playerId);
       const view=r?E.view(r,c.session.playerId,this.onlineFor(r),this.debugEnabled&&r.hostId===c.session.playerId):null;
-      if(view?.drawing)view.drawingStrokes=this.drawings.get(r!.code)?.id===view.drawing.id?this.drawings.get(r!.code)!.strokes:[];
+      if(view?.drawing&&view.phase!=='drawing')view.drawingStrokes=this.drawings.get(r!.code)?.id===view.drawing.id?this.drawings.get(r!.code)!.strokes:[];
       this.send(c.ws,{type:'snapshot',room:view});
       if(c.session.admin)this.send(c.ws,{type:'admin-rooms',rooms:this.adminRooms()});
     }
@@ -191,7 +197,7 @@ export class Hub {
           case 'set-card':E.submitCard(r,session.playerId,card!,c.setupId);break;
           case 'guess':E.guess(r,session.playerId,card!,c.turnId);break;
           case 'use-item-card':E.useItemCard(r,session.playerId,c.instanceId,c.turnId,c.targetPlayerId,this.onlineFor(r),changeoverCard);break;
-          case 'drawing-close':E.requireGame(r.drawing?.id===c.drawingId&&r.drawing.drawerId===session.playerId,'只有绘画者可以关闭画板');r.drawing=undefined;E.system(r,'绘画结束，画板已关闭','item-card');break;
+          case 'drawing-close':if(r.phase==='drawing'){E.completeInitialDrawing(r,session.playerId,c.drawingId);break;}E.requireGame(r.drawing?.id===c.drawingId&&r.drawing.drawerId===session.playerId,'只有绘画者可以关闭画板');r.drawing=undefined;E.system(r,'绘画结束，画板已关闭','item-card');break;
           case 'drawing-stroke':throw new E.GameError('绘画消息无法保存');
           case 'give-up':E.giveUp(r,session.playerId,c.turnId);break;
           case 'skip':E.skip(r,session.playerId,c.turnId,r.turnPlayerId!==session.playerId&&(r.hostId===session.playerId||session.admin));break;
@@ -235,8 +241,8 @@ export class Hub {
   private async persistDrawingActivity(){
     for(const [code,at] of this.drawingActivity){
       const old=this.rooms.get(code);
-      if(old&&at>lastActivity(old)){
-        const r=structuredClone(old);r.lastActivityAt=at;
+      if(old&&(at>lastActivity(old)||old.initialDrawings)){
+        const r=structuredClone(old);r.lastActivityAt=Math.max(at,lastActivity(old));
         await this.store.saveRoom(r);
         this.rooms.set(code,r);
       }
