@@ -19,7 +19,7 @@ function grant(r:ReturnType<typeof room>,cardId:ItemCardId){
 }
 test('new card weights occupy the expected weighted draw ranges',()=>{
   let offset=0;
-  for(const [id,weight] of [['greed-card',50],['warwolf-card',10],['moon-arrow-card',80]] as const){
+  for(const [id,weight] of [['greed-card',50],['warwolf-card',5],['moon-arrow-card',80]] as const){
     assert.equal(ITEM_CARDS[id].weight,weight);
     assert.equal(E.drawItemCard(offset),id);assert.equal(E.drawItemCard(offset+weight-1),id);
     offset+=weight;

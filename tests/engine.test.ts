@@ -35,6 +35,7 @@ test('item cards arrive on every third personal turn and can only be consumed on
  assert(r.entries.every(e=>e.itemCards?.length===0));
 });
 test('item card weights follow the catalogue and include music at weight 50 when configured',()=>{
+ assert.equal(ITEM_CARDS['scanner-card'].weight,50);
  assert.equal(ITEM_CARDS['music-card'].weight,50);
  let offset=0;
  const drawable=Object.values(ITEM_CARDS).filter(card=>card.weight>0&&(card.id!=='music-card'||PLAYABLE_MUSIC_TRACKS.length>0));

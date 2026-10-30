@@ -8,7 +8,7 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'warwolf-card': {
     id: 'warwolf-card', name: '狼人卡', category: 'monster', reference: '科技属 狼人',
-    image: '/warwolf-item-card.webp', description: '持有这张卡牌时，你可以撒谎。（被动效果，无法主动使用）', timing: 'passive', weight: 10,
+    image: '/warwolf-item-card.webp', description: '持有这张卡牌时，你可以撒谎。（被动效果，无法主动使用）', timing: 'passive', weight: 5,
   },
   'moon-arrow-card': {
     id: 'moon-arrow-card', name: '神弓卡', category: 'spell', reference: '月女神之镞',
@@ -66,7 +66,7 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'scanner-card': {
     id: 'scanner-card', name: '扫描卡', category: 'spell', reference: '卡片扫描者',
-    image: '/scanner-item-card.webp', description: '得知你的卡牌有多少字。', timing: 'own-turn', weight: 100,
+    image: '/scanner-item-card.webp', description: '得知你的卡牌有多少字。', timing: 'own-turn', weight: 50,
   },
   'moon-book-card': {
     id: 'moon-book-card', name: '月书卡', category: 'spell', reference: '月之书',
