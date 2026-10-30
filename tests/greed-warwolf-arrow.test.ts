@@ -8,7 +8,7 @@ import type { ItemCardId } from '../shared/types.js';
 function room(){
   const r=E.createRoom('ABCDEF','p0','游星',{mode:'custom',attempts:3,itemCards:true});
   E.join(r,'p1','海马');E.join(r,'p2','游戏');
-  r.players.forEach(p=>p.ready=true);E.startRound(r,[],true);
+  r.players.forEach(p=>p.ready=true);E.startRound(r,[]);
   for(let i=0;i<3;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);
   return r;
 }

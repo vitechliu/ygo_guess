@@ -9,7 +9,7 @@ function room(attempts=3): RoomState {
   E.join(r,'p1','p1');
   E.join(r,'p2','p2');
   r.players.forEach(player=>player.ready=true);
-  E.startRound(r,[],true);
+  E.startRound(r,[]);
   for(let i=0;i<3;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);
   return r;
 }
@@ -79,6 +79,6 @@ test('countdown starts after the using turn and ends the small round after 20 co
   assert.equal(r.finalCountdown,undefined);
   assert.equal(r.history.length,1);
   assert(r.chat.some(message=>message.kind==='item-card'&&message.text.includes('倒计时结束')));
-  E.startRound(r);
+  E.returnToLobby(r);E.members(r).forEach(p=>p.ready=true);E.startRound(r);
   assert.equal(r.finalCountdown,undefined);
 });

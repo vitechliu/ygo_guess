@@ -120,7 +120,7 @@ test('successful commands persist activity, rejected and repeated commands do no
     await h.hub.init();
     const r=room('ABCDEF',Date.now()-4*HOUR);
     h.hub.rooms.set(r.code,r);await h.store.saveRoom(r);
-    await assert.rejects(h.hub.handle(session(r.hostId),cmd({type:'next'})),/至少需要2名玩家/);
+    await assert.rejects(h.hub.handle(session(r.hostId),cmd({type:'next'})),/当前不能返回准备/);
     assert.equal(h.hub.roomFor(r.hostId)?.lastActivityAt,r.lastActivityAt);
     const chat=cmd({type:'chat',text:'hello'});
     await h.hub.handle(session(r.hostId),chat);

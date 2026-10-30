@@ -161,7 +161,7 @@ export class Hub {
         E.requireGame(DRAGONMAID_IDS.some(id=>id===changeoverCard!.id)&&changeoverCard.types.includes('怪兽'),'半龙女仆卡牌资料暂不可用，请稍后重试');
       }
     }
-    if(c.type==='start'||c.type==='next'){
+    if(c.type==='start'){
       const r=this.requireMember(session);
       E.requireGame(r.hostId===session.playerId,'只有房主可以执行此操作');
       if(r.settings.mode==='random')pool=await this.cards.pool();
@@ -189,11 +189,11 @@ export class Hub {
         if(r.processed.some(p=>p.key===key))return;
         const host=()=>E.requireGame(r.hostId===session.playerId,'只有房主可以执行此操作');
         switch(c.type){
-          case 'ready':E.requireGame(r.phase==='lobby','比赛开始后无需准备');r.players.find(p=>p.id===session.playerId)!.ready=c.ready;break;
+          case 'ready':E.requireGame(r.phase==='lobby','当前不在准备阶段');r.players.find(p=>p.id===session.playerId)!.ready=c.ready;break;
           case 'update-settings':host();E.updateSettings(r,c.settings);break;
           case 'shuffle':host();E.shuffleSeats(r);break;
-          case 'start':host();E.startRound(r,pool,true);break;
-          case 'next':host();E.startRound(r,pool);break;
+          case 'start':host();E.startRound(r,pool);break;
+          case 'next':host();E.returnToLobby(r);break;
           case 'set-card':E.submitCard(r,session.playerId,card!,c.setupId);break;
           case 'guess':E.guess(r,session.playerId,card!,c.turnId);break;
           case 'use-item-card':E.useItemCard(r,session.playerId,c.instanceId,c.turnId,c.targetPlayerId,this.onlineFor(r),changeoverCard);break;

@@ -40,7 +40,7 @@ try {
   for(let i=0;i<100&&!initialRoom.settings.initialDrawing;i++){await user.waitForTimeout(20);initialRoom=app.hub.roomFor(room.hostId)!;}
   assert(initialRoom.settings.initialDrawing);
   initialRoom.players.forEach(player=>player.ready=true);
-  E.startRound(initialRoom,[],true);
+  E.startRound(initialRoom,[]);
   for(let i=0;i<2;i++)E.submitCard(initialRoom,initialRoom.entries[i].playerId,cards[i],initialRoom.setupId);
   app.hub.broadcast();
   await user.getByRole('dialog',{name:'初始画猜画板'}).waitFor();

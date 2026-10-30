@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,readFile,writeFile} from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import {request as httpRequest} from 'node:http';import {randomUUID,createHash} from 'node:crypto';import {WebSocket} from 'ws';
 import {EventEmitter} from 'node:events';
-import {SqliteStore} from '../server/store.js';import {Hub,parseCommand} from '../server/hub.js';import {FileCache} from '../server/cache.js';import {Cards} from '../server/cards.js';import {createApp} from '../server/app.js';import {FixtureCards,cards,session} from './fixtures.js';import type {Command,ServerMessage,RoomView} from '../shared/types.js';
+import {SqliteStore} from '../server/store.js';import {Hub,parseCommand} from '../server/hub.js';import * as E from '../server/engine.js';import {FileCache} from '../server/cache.js';import {Cards} from '../server/cards.js';import {createApp} from '../server/app.js';import {FixtureCards,cards,session} from './fixtures.js';import type {Command,ServerMessage,RoomView} from '../shared/types.js';
 async function harness(){const dir=await mkdtemp(path.join(os.tmpdir(),'ygoguess-test-'));const store=new SqliteStore(path.join(dir,'test.sqlite'));const cards=new FixtureCards();const hub=new Hub(store,cards,1);await hub.init();return {dir,store,cards,hub,async close(){await hub.close();await store.close();}};}
 const cmd=(body:any)=>({...body,id:randomUUID()}) as Command;
 async function started(h:Hub){await h.handle(session('a'),cmd({type:'create',settings:{mode:'random',attempts:3}}));const r=h.roomFor('a')!;await h.handle(session('b'),cmd({type:'join',code:r.code}));await h.handle(session('b'),cmd({type:'ready',ready:true}));await h.handle(session('a'),cmd({type:'start'}));return h.roomFor('a')!;}
@@ -128,7 +128,7 @@ test('only the host can change lobby settings and changed rules require fresh re
   await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));await h.hub.handle(session('a'),cmd({type:'update-settings',settings:{mode:'custom',attempts:3}}));
   room=h.hub.roomFor('a')!;assert.equal(room.players.find(p=>p.id==='b')!.ready,false);
   await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));await h.hub.handle(session('a'),cmd({type:'start'}));
-  await assert.rejects(h.hub.handle(session('a'),cmd({type:'update-settings',settings:{mode:'random',attempts:2}})),/比赛开始后/);
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'update-settings',settings:{mode:'random',attempts:2}})),/准备阶段/);
  }finally{await h.close();}
 });
 test('legacy completed room resumes at round end with scores intact',async()=>{
@@ -149,8 +149,13 @@ test('legacy completed room resumes at round end with scores intact',async()=>{
    assert.equal(room.phase,'round-end');
    assert.equal('rounds' in room.settings,false);
    await restored.handle(session('a'),cmd({type:'next'}));
-   assert.equal(restored.roomFor('a')!.round,3);
+   assert.equal(restored.roomFor('a')!.phase,'lobby');
+   assert.equal(restored.roomFor('a')!.round,2);
    assert.deepEqual(restored.roomFor('a')!.players.map(p=>p.score),[2000,1000]);
+   assert.equal(restored.roomFor('a')!.players.find(p=>p.id==='b')!.ready,false);
+   await restored.handle(session('b'),cmd({type:'ready',ready:true}));
+   await restored.handle(session('a'),cmd({type:'start'}));
+   assert.equal(restored.roomFor('a')!.round,3);
   }finally{await restored.close();}
  }finally{await h.close();}
 });
@@ -166,7 +171,43 @@ test('host can shuffle the lobby repeatedly while readiness and persisted order 
   await h.hub.handle(session('a'),first);assert.equal(h.hub.roomFor('a')!.chat.filter(m=>m.text.startsWith('房主打乱了玩家顺序')).length,1);
   await h.hub.handle(session('a'),cmd({type:'shuffle'}));r=h.hub.roomFor('a')!;
   assert.deepEqual(r.players.map(p=>p.seat),original);assert.equal(r.chat.filter(m=>m.text.startsWith('房主打乱了玩家顺序')).length,2);
-  await h.hub.handle(session('a'),cmd({type:'start'}));await assert.rejects(h.hub.handle(session('a'),cmd({type:'shuffle'})),/比赛开始后/);
+  await h.hub.handle(session('a'),cmd({type:'start'}));await assert.rejects(h.hub.handle(session('a'),cmd({type:'shuffle'})),/准备阶段/);
+ }finally{await h.close();}
+});
+test('host returns to lobby after settlement, shuffles, and restarts without losing scores',async()=>{
+ const h=await harness();
+ try{
+  let r=await started(h.hub);
+  for(let turn=0;turn<2;turn++){
+   const id=r.turnPlayerId!;
+   await h.hub.handle(session(id),cmd({type:'guess',cardId:r.entries.find(e=>e.playerId===id)!.card!.id,turnId:r.turnId}));
+   r=h.hub.roomFor('a')!;
+  }
+  assert.equal(r.phase,'round-end');
+  assert.deepEqual(r.players.map(p=>p.score),[1000,1000]);
+  const oldOrder=E.members(r).map(p=>p.id);
+  await assert.rejects(h.hub.handle(session('b'),cmd({type:'next'})),/房主/);
+  await h.hub.handle(session('a'),cmd({type:'next'}));
+  r=h.hub.roomFor('a')!;
+  assert.equal(r.phase,'lobby');
+  assert.equal(r.round,1);
+  assert.equal(r.history.length,1);
+  assert.deepEqual(r.players.map(p=>p.score),[1000,1000]);
+  assert(r.players.every(p=>!p.ready));
+  assert.deepEqual(r.entries,[]);
+  assert.equal((await h.store.loadRooms()).find(room=>room.code===r.code)?.phase,'lobby');
+  await h.hub.handle(session('a'),cmd({type:'shuffle'}));
+  r=h.hub.roomFor('a')!;
+  assert.notDeepEqual(E.members(r).map(p=>p.id),oldOrder);
+  await h.hub.handle(session('a'),cmd({type:'update-settings',settings:{mode:'random',attempts:2}}));
+  assert.equal(h.hub.roomFor('a')!.settings.attempts,2);
+  await assert.rejects(h.hub.handle(session('a'),cmd({type:'start'})),/准备/);
+  await h.hub.handle(session('b'),cmd({type:'ready',ready:true}));
+  await h.hub.handle(session('a'),cmd({type:'start'}));
+  r=h.hub.roomFor('a')!;
+  assert.equal(r.round,2);
+  assert.deepEqual(r.players.map(p=>p.score),[1000,1000]);
+  assert.equal((await h.store.loadRooms()).find(room=>room.code===r.code)?.round,2);
  }finally{await h.close();}
 });
 test('server rejects nonhost start, wrong-turn guesses, forged permissions and malformed commands',async()=>{

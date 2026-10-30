@@ -16,14 +16,14 @@ const browser=await chromium.launch({headless:true,...(process.env.BROWSER_PATH?
 const errors:string[]=[],snapshots=new Map<Page,RoomView|null>();
 const checks:string[]=[];const check=(name:string)=>{checks.push(name);console.log('PASS '+name);};
 async function newPage(mobile=false){const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:1000}});const page=await context.newPage();page.setDefaultTimeout(20000);page.on('pageerror',e=>errors.push(e.message));page.on('websocket',ws=>ws.on('framereceived',f=>{try{const m=JSON.parse(f.payload.toString());if(m.type==='snapshot')snapshots.set(page,m.room);}catch{}}));return page;}
-async function waitFor(fn:()=>boolean,message:string){for(let i=0;i<300;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw new Error('Timeout: '+message);}
+async function waitFor(fn:()=>boolean|Promise<boolean>,message:string){for(let i=0;i<300;i++){if(await fn())return;await new Promise(r=>setTimeout(r,50));}throw new Error('Timeout: '+message);}
 async function pick(p:Page,name:string,button:string,keyboard=false){const input=p.locator('input[role="combobox"]');await input.fill(name);await p.getByRole('option').first().waitFor();if(keyboard){await input.press('ArrowDown');await input.press('Enter');}else await p.getByRole('option').filter({hasText:name}).first().click();await p.getByRole('button',{name:button,exact:true}).click();}
 async function overflow(p:Page){assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'horizontal overflow');}
 const seatOrder=(r:RoomView)=>r.players.filter(p=>!p.left).sort((a,b)=>a.seat-b.seat).map(p=>p.name).join(',');
 try{
  await mkdir('test-results',{recursive:true});
  const a=await newPage(),b=await newPage(),c=await newPage(true);
- await a.goto(base);await a.getByRole('heading',{name:'入座，开一局。'}).waitFor();assert.equal(await a.getByLabel('游戏版本 '+gameVersion).innerText(),'v'+gameVersion);await a.screenshot({path:'test-results/home-desktop.png',fullPage:true});
+ await a.goto(base);await a.getByRole('heading',{name:'入座，开一局。'}).waitFor();assert.equal(await a.getByLabel('查看更新说明，当前版本 '+gameVersion).innerText(),'v'+gameVersion);await a.screenshot({path:'test-results/home-desktop.png',fullPage:true});
  await a.getByLabel('你的昵称').fill('游星');await a.getByLabel('每局猜测机会').fill('1');await a.getByRole('button',{name:'创建房间，邀请朋友'}).click();
  await a.locator('.code-copy').waitFor();const code=(await a.locator('.code-copy').innerText()).trim();
  assert(await a.getByRole('button',{name:'开始游戏',exact:true}).isDisabled());assert(await a.getByRole('button',{name:'打乱顺序'}).isDisabled());
@@ -34,8 +34,8 @@ try{
  await b.getByRole('button',{name:'我准备好了'}).click();await waitFor(()=>snapshots.get(a)?.players.some(p=>p.name==='游戏'&&p.ready)??false,'ready');
  assert.equal(await b.getByRole('button',{name:'保存设置'}).count(),0);
  await a.getByRole('radio',{name:'随机分配'}).check();await a.getByLabel('房间每局猜测机会').fill('2');await a.getByRole('button',{name:'保存设置'}).click();
- await waitFor(()=>snapshots.get(b)?.settings.mode==='random'&&!snapshots.get(b)?.players.find(p=>p.name==='游戏')?.ready,'lobby settings update');
- assert(await a.getByRole('button',{name:'开始游戏',exact:true}).isDisabled());assert(await a.getByRole('button',{name:'打乱顺序'}).isEnabled());
+ await waitFor(()=>snapshots.get(b)?.settings.mode==='random'&&snapshots.get(a)?.players.find(p=>p.name==='游戏')?.ready===false,'lobby settings update');
+ await waitFor(()=>a.getByRole('button',{name:'开始游戏',exact:true}).isDisabled(),'start disabled after settings update');assert(await a.getByRole('button',{name:'打乱顺序'}).isEnabled());
  await a.getByRole('radio',{name:'好友出题'}).check();await a.getByLabel('房间每局猜测机会').fill('1');await a.getByRole('button',{name:'保存设置'}).click();
  await waitFor(()=>snapshots.get(b)?.settings.mode==='custom'&&snapshots.get(b)?.settings.attempts===1,'restored lobby settings');
  await b.getByRole('button',{name:'我准备好了'}).click();await waitFor(()=>snapshots.get(a)?.players.some(p=>p.name==='游戏'&&p.ready)??false,'ready after settings update');
@@ -68,7 +68,11 @@ try{
  assert.equal(await a.locator('.system-message.guess-wrong').filter({hasText:'游星 猜测了「'+targets[0].name+'」'}).count(),1);
  await a.screenshot({path:'test-results/chat-guess-styles.png',fullPage:true});
  assert.equal(snapshots.get(a)!.players.find(p=>p.name==='游戏')!.score,1000);assert.equal(snapshots.get(a)!.players.find(p=>p.name==='游星')!.status,'failed');check('midmatch chat and joining, refresh recovery, skip, correct and final incorrect guesses');
- await a.getByRole('button',{name:'开始下一局'}).click();await waitFor(()=>snapshots.get(c)?.phase==='setting','next round');
+ await a.getByRole('button',{name:'返回准备'}).click();await waitFor(()=>snapshots.get(c)?.phase==='lobby','return to lobby');
+ assert.equal(snapshots.get(a)!.players.find(p=>p.name==='游戏')!.score,1000);
+ await b.getByRole('button',{name:'我准备好了'}).click();await c.getByRole('button',{name:'我准备好了'}).click();
+ await waitFor(()=>snapshots.get(a)?.players.filter(p=>!p.left&&p.id!==snapshots.get(a)!.hostId).every(p=>p.ready)??false,'ready for next round');
+ await a.getByRole('button',{name:'开始游戏'}).click();await waitFor(()=>snapshots.get(c)?.phase==='setting','next round');
  await pick(a,targets[0].name,'确认出题');await pick(b,targets[1].name,'确认出题');await pick(c,targets[2].name,'确认出题');
  await waitFor(()=>snapshots.get(b)?.phase==='guessing','second guessing');assert.equal(snapshots.get(b)!.turnPlayerId,snapshots.get(b)!.selfId);assert(!snapshots.get(c)!.players.find(p=>p.name==='十代')!.waiting);assert.equal(snapshots.get(c)!.players.find(p=>p.name==='十代')!.card,undefined);assert.equal(snapshots.get(c)!.players.filter(p=>p.card).length,2);
  await overflow(c);await c.locator('.card-image-button img').evaluateAll(async imgs=>{await Promise.all(imgs.map(i=>(i as HTMLImageElement).decode()));});await c.screenshot({path:'test-results/game-mobile.png',fullPage:true});

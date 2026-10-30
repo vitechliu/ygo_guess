@@ -9,7 +9,7 @@ function room():RoomState {
   const r=E.createRoom('ABCDEF','p0','p0',{mode:'custom',attempts:3,itemCards:true});
   E.join(r,'p1','p1');E.join(r,'p2','p2');
   r.players.forEach(player=>player.ready=true);
-  E.startRound(r,[],true);
+  E.startRound(r,[]);
   for(let i=0;i<3;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);
   return r;
 }

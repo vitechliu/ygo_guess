@@ -7,7 +7,7 @@ function setup(n=3){
   const r=E.createRoom('ABCDEF','p0','p0',{mode:'custom',attempts:3,initialDrawing:true,itemCards:false});
   for(let i=1;i<n;i++)E.join(r,'p'+i,'p'+i);
   r.players.forEach(p=>p.ready=true);
-  E.startRound(r,[],true);
+  E.startRound(r,[]);
   for(let i=0;i<n;i++)E.submitCard(r,'p'+i,cards[i],r.setupId);
   return r;
 }
@@ -20,7 +20,7 @@ test('initial drawing is custom-only, changes readiness, and defaults off',()=>{
   assert.equal(r.players[1].ready,false);
   assert.throws(()=>E.updateSettings(r,{...r.settings,mode:'random'}),/仅支持好友出题/);
   E.updateSettings(r,{...r.settings,initialDrawing:false});r.players[1].ready=true;
-  E.startRound(r,[],true);E.submitCard(r,'a',cards[0],r.setupId);E.submitCard(r,'b',cards[1],r.setupId);
+  E.startRound(r,[]);E.submitCard(r,'a',cards[0],r.setupId);E.submitCard(r,'b',cards[1],r.setupId);
   assert.equal(r.phase,'guessing');assert.equal(r.initialDrawings,undefined);
 });
 
@@ -53,7 +53,7 @@ test('draw for predecessor privately, wait for everyone, then share artwork with
     assert.equal(view.initialDrawingCard,undefined);
     assert.equal(view.players.find(p=>p.id===id)?.card,undefined);
   }
-  E.finishRound(r);E.startRound(r);
+  E.finishRound(r);E.returnToLobby(r);E.members(r).forEach(p=>p.ready=true);E.startRound(r);
   assert.equal(r.initialDrawings,undefined);assert.equal(r.phase,'setting');
 });
 

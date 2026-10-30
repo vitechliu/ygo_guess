@@ -77,7 +77,7 @@ try {
   finishRound(app.hub.rooms.get(code)!);
   app.hub.broadcast();
   await host.locator('.card-name-cover').waitFor({state:'detached'});
-  await host.getByRole('button',{name:'开始下一局'}).click();
+  await host.getByRole('button',{name:'返回准备'}).click();
   assert.equal(app.hub.rooms.get(code)!.visualEffects?.obscuredPlayerIds,undefined);
   console.log('PASS new item cards browser flow');
 } finally {

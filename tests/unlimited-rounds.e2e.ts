@@ -64,9 +64,21 @@ try{
     assert.equal(snapshots.get(a)!.round,round);
     assert.deepEqual(snapshots.get(a)!.players.map(p=>p.score),[round*1000,round*1000]);
     await a.getByText('累计积分排行榜',{exact:true}).waitFor();
-    if(round<2)await a.getByRole('button',{name:'开始下一局'}).click();
+    if(round<2){
+      await a.getByRole('button',{name:'返回准备'}).click();
+      await wait(()=>snapshots.get(a)?.phase==='lobby');
+      assert.deepEqual(snapshots.get(a)!.players.map(p=>p.score),[1000,1000]);
+      assert.equal(snapshots.get(a)!.players.find(p=>p.name==='乙')!.ready,false);
+      const before=snapshots.get(a)!.players.map(p=>p.seat);
+      await a.getByRole('button',{name:'打乱顺序'}).click();
+      await wait(()=>snapshots.get(a)?.players.some((p,i)=>p.seat!==before[i])??false);
+      assert(await a.getByRole('button',{name:'开始游戏'}).isDisabled());
+      await b.getByRole('button',{name:'我准备好了'}).click();
+      await wait(()=>!!snapshots.get(a)?.players.find(p=>p.name==='乙'&&p.ready));
+      await a.getByRole('button',{name:'开始游戏'}).click();
+    }
   }
-  console.log('PASS browser creates without round count and keeps scores through two rounds');
+  console.log('PASS browser returns to lobby, shuffles, and keeps scores through two rounds');
 }finally{
   await browser?.close();
   await app.close();

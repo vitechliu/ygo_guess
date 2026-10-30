@@ -27,7 +27,7 @@ export function debugAction(r:RoomState,command:Extract<Command,{type:'debug'}>)
     join(r,'debug-bot:'+r.code,'测试玩家');
     r.settings={...r.settings,mode:'random',itemCards:true};
     r.players.forEach(player=>player.ready=true);
-    startRound(r,DEBUG_CARDS,true);
+    startRound(r,DEBUG_CARDS);
     return;
   }
   requireGame(r.phase==='guessing','请先进入猜卡阶段');
@@ -109,7 +109,7 @@ export function join(r: RoomState, id: string, name: string) {
   system(r,name+(previous?' 重新加入了房间':' 加入了房间')+(r.phase==='lobby'?'':'，将在下一局参赛'));
 }
 export function updateSettings(r:RoomState,settings:Settings) {
-  requireGame(r.phase==='lobby','比赛开始后不能修改设置');
+  requireGame(r.phase==='lobby','仅准备阶段可以修改设置');
   requireGame(!settings.initialDrawing||settings.mode==='custom','初始画猜仅支持好友出题');
   if((r.settings.initialDrawing??false)===(settings.initialDrawing??false)&&r.settings.mode===settings.mode&&r.settings.attempts===settings.attempts&&(r.settings.itemCards??true)===(settings.itemCards??true))return;
   r.settings=settings;
@@ -117,7 +117,7 @@ export function updateSettings(r:RoomState,settings:Settings) {
   system(r,'房主修改了规则：'+(settings.mode==='custom'?'好友出题':'随机分配')+' · 每局 '+settings.attempts+' 次猜测 · 道具卡'+(settings.itemCards===false?'关闭':'开启')+(settings.initialDrawing?' · 初始画猜开启':'')+'。请重新准备');
 }
 export function shuffleSeats(r:RoomState) {
-  requireGame(r.phase==='lobby','比赛开始后不能打乱顺序');
+  requireGame(r.phase==='lobby','仅准备阶段可以打乱顺序');
   const ordered=members(r);
   requireGame(ordered.length>=2,'至少需要2名玩家才能打乱顺序');
   let shuffled=[...ordered];
@@ -128,13 +128,11 @@ export function shuffleSeats(r:RoomState) {
   shuffled.forEach((p,i)=>p.seat=i);
   system(r,'房主打乱了玩家顺序：'+shuffled.map(p=>p.name).join(' → '));
 }
-export function startRound(r: RoomState, pool: Card[] = [], first = false) {
+export function startRound(r: RoomState, pool: Card[] = []) {
   const ps=members(r);
+  requireGame(r.phase==='lobby','当前不在准备阶段');
   requireGame(ps.length>=2,'至少需要2名玩家');
-  if(first) {
-    requireGame(r.phase==='lobby','比赛已开始');
-    requireGame(ps.every(p=>p.id===r.hostId||p.ready),'等待所有非房主玩家准备');
-  } else requireGame(r.phase==='round-end','当前不能进入下一局');
+  requireGame(ps.every(p=>p.id===r.hostId||p.ready),'等待所有非房主玩家准备');
   if(r.settings.mode==='random') requireGame(new Set(pool.map(c=>c.cid)).size>=ps.length,'精选题库未配置或有效卡牌不足，请配置题库或使用出题模式');
   r.initialDrawings=undefined;
   r.round++; r.setupId=randomUUID(); r.turnPlayerId=null; r.turnId='';r.visualEffects={};r.finalCountdown=undefined;r.music=undefined;r.drawing=undefined;
@@ -475,7 +473,22 @@ export function finishRound(r:RoomState,early=false) {
   }
   r.turnPlayerId=null; r.turnId='';
   r.phase='round-end';
-  system(r,early?'本局提前结束，等待房主开始下一局':'本局结束，等待房主开始下一局');
+  system(r,early?'本局提前结束，等待房主返回准备':'本局结束，等待房主返回准备');
+}
+export function returnToLobby(r:RoomState) {
+  requireGame(r.phase==='round-end','当前不能返回准备');
+  for(const p of members(r))p.ready=false;
+  r.phase='lobby';
+  r.entries=[];
+  r.turnPlayerId=null;
+  r.turnId='';
+  r.setupId='';
+  r.visualEffects={};
+  r.finalCountdown=undefined;
+  r.music=undefined;
+  r.drawing=undefined;
+  r.initialDrawings=undefined;
+  system(r,'已返回准备阶段，请重新准备；房主可以打乱顺序');
 }
 export function leave(r:RoomState,id:string,online:Set<string>,removedBy?:'房主'|'管理员') {
   const p=r.players.find(p=>p.id===id&&!p.left);
