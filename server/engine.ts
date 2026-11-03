@@ -176,6 +176,7 @@ export function addInitialDrawingStroke(r:RoomState,id:string,drawingId:string,p
 function beginGuessing(r: RoomState) {
   const entries=r.entries.filter(e=>e.status!=='left');
   r.phase='guessing'; const entry=entries[(r.round-1)%entries.length];
+  r.turnCycle=1; r.turnCycleStartPlayerId=entry.playerId;
   activate(r,entry);
 }
 function activate(r: RoomState,e: Entry) {
@@ -438,8 +439,12 @@ export function giveUp(r:RoomState,id:string,turnId:string) {
   system(r,r.players.find(p=>p.id===id)!.name+' 放弃了本局猜题，剩余猜测机会已清零');
   advance(r);
 }
+export function canSkipTurn(r:RoomState) {
+  return r.phase==='guessing'&&r.entries.filter(e=>e.status==='playing').length>1;
+}
 export function skip(r:RoomState,id:string,turnId:string,force=false) {
   validateTurn(r,id,turnId,force);
+  requireGame(canSkipTurn(r),'仅剩一名玩家仍在猜卡，不能跳过回合，请提交猜测');
   const e=r.entries.find(e=>e.playerId===r.turnPlayerId);
   if(e?.status==='playing'&&e.reversalTurnId===r.turnId){e.attempts=0;e.status='failed';e.failedByGuess=false;system(r,(r.players.find(p=>p.id===e.playerId)?.name??'玩家')+' 的逆转卡回合未猜中，本局机会已用完','item-card');}
   system(r,(r.players.find(p=>p.id===r.turnPlayerId)?.name??'当前玩家')+' 的回合已'+(force?'被强制':'')+'跳过');
@@ -451,11 +456,15 @@ function advance(r:RoomState) {
     if(r.finalCountdown.remainingTurns===0){system(r,'终焉卡倒计时结束，本局立即结束','item-card');finishRound(r);return;}
   }
   const current=r.entries.findIndex(e=>e.playerId===r.turnPlayerId);
+  // Keep the original cycle boundary even when its first player finishes or leaves.
+  const start=Math.max(0,r.entries.findIndex(e=>e.playerId===r.turnCycleStartPlayerId));
+  const offset=(current-start+r.entries.length)%r.entries.length;
   const pendingSkips=r.entries.reduce((count,e)=>count+(e.status==='playing'?(e.skipNextTurns??0):0),0);
   for(let step=1;step<=r.entries.length+pendingSkips;step++) {
     const e=r.entries[(current+step)%r.entries.length];
     if(e.status!=='playing')continue;
     if((e.skipNextTurns??0)>0){e.skipNextTurns=(e.skipNextTurns??0)-1;system(r,(r.players.find(p=>p.id===e.playerId)?.name??'玩家')+' 的回合被禁止卡跳过','item-card');continue;}
+    r.turnCycle=(r.turnCycle??1)+Math.floor((offset+step)/r.entries.length);
     activate(r,e);return;
   }
   finishRound(r);
@@ -521,7 +530,7 @@ export function view(r:RoomState,selfId:string,online:Set<string>,debugEnabled=f
   const reveal=r.phase==='round-end'||r.phase==='match-end';
   const initial=r.phase==='drawing'&&participant?r.initialDrawings?.find(d=>d.drawerId===selfId&&!d.submitted):undefined;
   const next=participant?r.entries[(index+1)%r.entries.length]:undefined;
-  return {code:r.code,hostId:r.hostId,settings:r.settings,phase:r.phase,round:r.round,turnPlayerId:r.turnPlayerId,turnId:r.turnId,setupId:r.setupId,version:r.version,selfId,
+  return {code:r.code,hostId:r.hostId,settings:r.settings,phase:r.phase,round:r.round,turnCycle:r.turnCycle??1,canSkipTurn:canSkipTurn(r),turnPlayerId:r.turnPlayerId,turnId:r.turnId,setupId:r.setupId,version:r.version,selfId,
     players:r.players.map(p=>{
       const e=r.entries.find(e=>e.playerId===p.id);
       return {...p,name:(r.visualEffects?.clownNames?.[p.id]?.endsAt??0)>Date.now()?'🤡':p.name,online:online.has(p.id),waiting:r.phase!=='lobby'&&(!e||e.status==='left')&&!p.left,status:e?.status,attempts:e?.attempts??r.settings.attempts,turns:e?.turns??0,points:e?.points??0,submitted:e?.submitted??false,failedByGuess:e?.failedByGuess??false,

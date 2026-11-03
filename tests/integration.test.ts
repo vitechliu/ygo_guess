@@ -56,6 +56,40 @@ test('host skipping their own turn uses the normal notice, while skipping anothe
   assert.equal(h.hub.roomFor('a')!.chat.at(-1)?.text,'b 的回合已跳过');
  }finally{await h.close();}
 });
+test('last survivor rejects player, host and admin skips and keeps the restriction after restart',async()=>{
+ const h=await harness();try{
+  let r=await started(h.hub);
+  await h.hub.handle(session('a'),cmd({type:'guess',cardId:r.entries[0].card!.id,turnId:r.turnId}));
+  r=h.hub.roomFor('a')!;
+  let before=structuredClone(r);
+  const savedBefore=(await h.store.loadRooms()).find(saved=>saved.code===r.code);
+  const rejectsSkips=async()=>{
+   for(const actor of [session('b'),session('a'),session('a',true)]){
+    await assert.rejects(h.hub.handle(actor,cmd({type:'skip',turnId:r.turnId})),/仅剩一名.*不能跳过/);
+   }
+   await assert.rejects(h.hub.handle(session('admin',true),cmd({type:'admin-skip',code:r.code,turnId:r.turnId})),/仅剩一名.*不能跳过/);
+   assert.deepEqual(h.hub.roomFor('a'),before);
+   assert.deepEqual((await h.store.loadRooms()).find(saved=>saved.code===r.code),savedBefore);
+   const list=await h.hub.handle(session('admin',true),cmd({type:'admin-list'}));
+   assert(list?.type==='admin-rooms');
+   assert.equal(list.rooms.find(room=>room.code===r.code)!.canSkipTurn,false);
+  };
+  await rejectsSkips();
+  await h.hub.close();
+  h.hub=new Hub(h.store,h.cards,1);await h.hub.init();
+  r=h.hub.roomFor('b')!;
+  before=structuredClone(r);
+  await rejectsSkips();
+  for(let remaining=2;remaining>=0;remaining--){
+   const wrong=cards.find(card=>card.cid!==r.entries[1].card!.cid)!;
+   await h.hub.handle(session('b'),cmd({type:'guess',cardId:wrong.id,turnId:r.turnId}));
+   r=h.hub.roomFor('b')!;
+   assert.equal(r.entries[1].attempts,remaining);
+   assert.equal(r.phase,remaining>0?'guessing':'round-end');
+  }
+  assert.equal((await h.store.loadRooms()).find(saved=>saved.code===r.code)!.phase,'round-end');
+ }finally{await h.hub.close();await h.store.close();}
+});
 test('item use is persisted once and rejects forged or stale turns',async()=>{
  const h=await harness();try{
   const r=await started(h.hub);const instance={instanceId:randomUUID(),cardId:'test-card' as const};r.entries[0].itemCards!.push(instance);const turn=r.turnId;

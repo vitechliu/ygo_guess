@@ -107,3 +107,4 @@
 @media(prefers-reduced-motion:reduce){.moon-arrow-impact-card{animation:none}.moon-arrow-trail,.moon-arrow-flash,.moon-arrow-sparks{display:none}.moon-arrow-weapon{animation:none;transform:translate(-2.2%,-50%) rotate(-36deg)}.moon-arrow-rift{animation:none}}
 
 .initial-drawing-target{display:flex;align-items:center;gap:16px;margin-bottom:12px}.initial-drawing-target img{width:60px;height:88px;object-fit:contain}.initial-drawing-target p{margin:6px 0;color:var(--muted-foreground)}.drawing-view-dialog{width:min(900px,calc(100vw - 32px));max-width:900px}.drawing-view-dialog .drawing-canvas{width:100%;height:auto}.card-caption>button{margin-bottom:8px}
+.table-phase{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.turn-cycle{padding:4px 10px;border:1px solid #526e55;border-radius:5px;background:#23382f;color:#d7edc1;font-size:.75rem;font-weight:600;white-space:nowrap}

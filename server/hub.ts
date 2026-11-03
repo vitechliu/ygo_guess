@@ -56,6 +56,8 @@ export class Hub {
     for(const r of await this.store.loadRooms()){
       // Rooms saved before unlimited rounds may be at their old match boundary.
       if(r.phase==='match-end')r.phase='round-end';
+      r.turnCycle??=Math.max(1,...r.entries.map(e=>e.turns));
+      r.turnCycleStartPlayerId??=r.entries[(r.round-1)%r.entries.length]?.playerId;
       r.settings={mode:r.settings.mode,attempts:r.settings.attempts,itemCards:r.settings.itemCards,initialDrawing:r.settings.mode==='custom'&&r.settings.initialDrawing};
       this.rooms.set(r.code,r);
     }
@@ -98,7 +100,7 @@ export class Hub {
     ws.on('close',()=>{this.clients.delete(c);this.broadcast();});
     ws.on('error',()=>{});
   }
-  private adminRooms():AdminRoom[]{const online=this.online();return [...this.rooms.values()].filter(r=>r.phase!=='closed').map(r=>({code:r.code,phase:r.phase,round:r.round,hostId:r.hostId,turnId:r.turnId,turnPlayerId:r.turnPlayerId,players:E.members(r).map(p=>({id:p.id,name:p.name,online:online.has(p.id)}))}));}
+  private adminRooms():AdminRoom[]{const online=this.online();return [...this.rooms.values()].filter(r=>r.phase!=='closed').map(r=>({code:r.code,canSkipTurn:E.canSkipTurn(r),phase:r.phase,round:r.round,hostId:r.hostId,turnId:r.turnId,turnPlayerId:r.turnPlayerId,players:E.members(r).map(p=>({id:p.id,name:p.name,online:online.has(p.id)}))}));}
   private handleDrawingStroke(session:Session,c:Extract<Command,{type:'drawing-stroke'}>){
     E.requireGame(session.expiresAt>Date.now(),'会话已过期');
     const room=this.roomFor(session.playerId);
