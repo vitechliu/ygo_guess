@@ -14,6 +14,8 @@ services:
       REDIS_URL: "redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379"
       ADMIN_ENTRY_KEY: "${ADMIN_ENTRY_KEY:-}"
       COOKIE_SECURE: "${COOKIE_SECURE:-0}"
+      OPS_LOG_REPORT_URL: "${OPS_LOG_REPORT_URL:-}"
+      OPS_LOG_SOURCE: "${OPS_LOG_SOURCE:-ygo_guess}"
     volumes:
       - ./config/card-pool.json:/app/config/card-pool.json:ro
     depends_on:

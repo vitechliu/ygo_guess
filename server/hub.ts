@@ -7,6 +7,7 @@ import type { CardProvider } from './cards.js';
 import { ITEM_CARDS } from '../shared/item-cards.js';
 import { DRAGONMAID_IDS } from '../shared/dragonmaids.js';
 import * as E from './engine.js';
+import { gameEvents, type OpsReporter } from './ops-log.js';
 
 const base={id:z.string().min(1).max(80)};
 const ROOM_IDLE_MS=3*60*60*1000;
@@ -51,7 +52,7 @@ export class Hub {
   private away=new Map<string,number>(); private timer?:NodeJS.Timeout; private recent=new Map<string,number>();
   private cleanupTimer?:NodeJS.Timeout;
   private drawingActivity=new Map<string,number>();
-  constructor(private store:Store,private cards:CardProvider,private hostGraceMs=30000,private debugEnabled=false){}
+  constructor(private store:Store,private cards:CardProvider,private hostGraceMs=30000,private debugEnabled=false,private opsReporter?:OpsReporter){}
   async init(){
     for(const r of await this.store.loadRooms()){
       // Rooms saved before unlimited rounds may be at their old match boundary.
@@ -67,7 +68,7 @@ export class Hub {
     this.cleanupTimer=setInterval(()=>void this.cleanupRooms().catch(()=>console.error('Room cleanup failed')),ROOM_CLEANUP_INTERVAL_MS);
     this.cleanupTimer.unref();
   }
-  async close(){clearInterval(this.timer);clearInterval(this.cleanupTimer);for(const c of this.clients)c.ws.close(1001,'服务正在重启');await this.enqueue(()=>this.persistDrawingActivity());}
+  async close(){clearInterval(this.timer);clearInterval(this.cleanupTimer);for(const c of this.clients)c.ws.close(1001,'服务正在重启');await this.enqueue(()=>this.persistDrawingActivity());await this.opsReporter?.close();}
   online(){return new Set([...this.clients].filter(c=>c.ws.readyState===WebSocket.OPEN).map(c=>c.session.playerId));}
   private onlineFor(r:RoomState){const online=this.online();if(this.debugEnabled)for(const player of r.players)if(!player.left&&player.id==='debug-bot:'+r.code)online.add(player.id);return online;}
   roomFor(id:string){return [...this.rooms.values()].find(r=>r.phase!=='closed'&&r.players.some(p=>p.id===id&&!p.left));}
@@ -218,11 +219,19 @@ export class Hub {
       r.version++;r.processed.push({key,at:r.lastActivityAt});r.processed=r.processed.slice(-500);
       if(previousRoom)await this.store.saveRooms([previousRoom,r]);
       else await this.store.saveRoom(r,audit);
-      if(previousRoom)this.rooms.set(previousRoom.code,previousRoom);
+      if(previousRoom){
+        this.reportGameEvents(this.rooms.get(previousRoom.code),previousRoom,'switch-room');
+        this.rooms.set(previousRoom.code,previousRoom);
+      }
+      this.reportGameEvents(this.rooms.get(r.code),r,c.type);
       this.rooms.set(r.code,r);this.recent.set(key,Date.now());
       if(this.recent.size>3000){for(const [k,at]of this.recent)if(at<Date.now()-3600000||this.recent.size>3000)this.recent.delete(k);}
       this.broadcast();
     });
+  }
+  private reportGameEvents(before:RoomState|undefined,after:RoomState,reason:string){
+    if(!this.opsReporter)return;
+    for(const event of gameEvents(before,after,reason))this.opsReporter.report(event);
   }
   async cleanupRooms(){
     return this.enqueue(async()=>{
@@ -232,6 +241,7 @@ export class Hub {
       // Delete durable state first; a failed transaction must leave live rooms intact.
       await this.store.deleteRooms(expired.map(r=>r.code));
       for(const r of expired){
+        this.reportGameEvents(r,{...r,phase:'closed'},'idle-timeout');
         this.rooms.delete(r.code);
         this.away.delete(r.code);
         this.drawings.delete(r.code);
