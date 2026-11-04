@@ -77,3 +77,30 @@ test('initial drawings enforce stroke and point limits',()=>{
   d.strokes=[{points:Array.from({length:12000},()=>[1,2])}];
   assert.throws(()=>E.addInitialDrawingStroke(r,'p0',d.id,[[1,2]],true),/笔画上限/);
 });
+
+test('eight-player drawing status updates for everyone without exposing other drawings or answers',()=>{
+  const r=setup(8);
+  E.join(r,'spectator','spectator');
+  const initial=E.view(r,'p3',new Set());
+  assert.deepEqual(initial.drawingProgress,{completed:0,total:8});
+  assert(initial.players.filter(p=>!p.waiting).every(p=>p.drawingSubmitted===false));
+  E.completeInitialDrawing(r,'p0',r.initialDrawings![0].id);
+  for(const id of ['p0','p3','spectator']){
+    const v=E.view(r,id,new Set());
+    assert.deepEqual(v.drawingProgress,{completed:1,total:8});
+    assert.equal(v.players.find(p=>p.id==='p0')?.drawingSubmitted,true);
+    assert.equal(v.players.find(p=>p.id==='p1')?.drawingSubmitted,false);
+    assert.equal(v.players.find(p=>p.id==='spectator')?.drawingSubmitted,undefined);
+    assert.equal(v.initialDrawings,undefined);
+    assert(v.players.every(p=>!p.card));
+  }
+  E.leave(r,'p1',new Set());
+  const afterLeave=E.view(r,'p3',new Set());
+  assert.equal(afterLeave.players.find(p=>p.id==='p1')?.drawingSubmitted,undefined);
+  assert.equal(afterLeave.players.find(p=>p.id==='p2')?.drawingSubmitted,true,'cancelled task counts as finished');
+  assert.equal(afterLeave.drawingProgress?.completed,afterLeave.players.filter(p=>!p.left&&!p.waiting&&p.drawingSubmitted).length);
+  assert.equal(afterLeave.drawingProgress?.total,7);
+  for(const d of r.initialDrawings!.filter(d=>!d.submitted))E.completeInitialDrawing(r,d.drawerId,d.id);
+  assert.equal(r.phase,'guessing');
+  assert(E.view(r,'p3',new Set()).players.every(p=>p.drawingSubmitted===undefined));
+});

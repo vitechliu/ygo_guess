@@ -117,3 +117,5 @@
 .pink-form label { font-size: 13px; font-weight: 600; }
 .pink-form p { overflow-wrap: anywhere; }
 .pink-error { color: #fda4af; font-size: 13px; overflow-wrap: anywhere; }
+
+.drawing-progress{width:100%;margin-top:16px;font-size:14px}.drawing-progress ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0;margin:0 0 10px}.drawing-progress li{display:flex;align-items:center;gap:10px;border:1px solid currentColor;border-radius:8px;padding:5px 10px;min-width:0}.drawing-progress .drawing-player-name{overflow-wrap:anywhere}.drawing-progress .drawing-player-status{white-space:nowrap;opacity:.75}.drawing-progress li.completed .drawing-player-status{color:#438047;opacity:1}.drawing-progress-count{font-weight:600}.drawing-waiting{width:100%}

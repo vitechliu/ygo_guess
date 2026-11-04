@@ -45,6 +45,9 @@ try {
   app.hub.broadcast();
   await user.getByRole('dialog',{name:'初始画猜画板'}).waitFor();
   await drawer.getByRole('dialog',{name:'初始画猜画板'}).waitFor();
+  const drawingProgress=drawer.getByRole('dialog',{name:'初始画猜画板'}).getByRole('region',{name:'绘画完成状态'});
+  await drawingProgress.getByText('已完成 0 / 2 人',{exact:true}).waitFor();
+  assert.equal(await drawingProgress.getByText('正在绘画',{exact:true}).count(),2);
   const initialBoard=user.getByLabel('共享画板');const initialBox=await initialBoard.boundingBox();assert(initialBox);
   await user.mouse.move(initialBox.x+80,initialBox.y+80);await user.mouse.down();await user.mouse.move(initialBox.x+160,initialBox.y+140,{steps:8});await user.mouse.up();
   await user.reload();await user.getByRole('dialog',{name:'初始画猜画板'}).waitFor();
@@ -54,6 +57,16 @@ try {
   await user.getByRole('button',{name:'提交画作',exact:true}).click();
   await user.getByRole('dialog',{name:'初始画猜画板'}).waitFor({state:'detached'});
   assert.equal(app.hub.roomFor(room.hostId)!.phase,'drawing');
+  await drawingProgress.getByText('已完成 1 / 2 人',{exact:true}).waitFor();
+  await drawingProgress.locator('li').filter({hasText:'使用者'}).getByText('已完成绘画',{exact:true}).waitFor();
+  await drawingProgress.locator('li').filter({hasText:'绘画者'}).getByText('正在绘画',{exact:true}).waitFor();
+  const waiting=user.getByRole('region',{name:'绘画完成状态'});
+  await waiting.getByText('已完成 1 / 2 人',{exact:true}).waitFor();
+  await user.getByTestId('player-'+room.hostId).getByText('已完成绘画',{exact:true}).waitFor();
+  await user.reload();
+  await waiting.getByText('已完成 1 / 2 人',{exact:true}).waitFor();
+  await user.screenshot({path:'test-results/drawing-status-waiting.png',fullPage:true,animations:'disabled'});
+  await drawer.screenshot({path:'test-results/drawing-status-mobile.png',fullPage:true,animations:'disabled'});
   await drawer.getByRole('button',{name:'提交画作',exact:true}).click();
   await drawer.getByRole('dialog',{name:'初始画猜画板'}).waitFor({state:'detached'});
   await user.getByRole('button',{name:'查看画作',exact:true}).first().waitFor();

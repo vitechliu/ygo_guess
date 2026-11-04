@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DrawingPoint, DrawingStroke, RoomView } from '../shared/types';
+import { DrawingProgress } from './DrawingProgress';
 import type { Send } from './game';
 
 const WIDTH=800;
@@ -89,6 +90,7 @@ export function DrawingBoard({room,send,connected}:{room:RoomView;send:Send;conn
       <div className="drawing-heading"><div><strong>{initial?'初始画猜 · 为上家绘画':'忘我卡 · 绘画提示'}</strong><span>{drawer?`请为 ${userName} 画出卡牌线索`:`${drawerName} 正在为 ${userName} 绘画`}</span></div>{drawer&&<button type="button" disabled={!connected||busy} onClick={async()=>{flush();setBusy(true);try{if(initial){await Promise.all(inflight.current);if(syncFailed.current){setWarning('部分笔画未同步，请刷新画板确认后再提交');return;}}await send({type:'drawing-close',drawingId:drawing.id});}catch{}finally{setBusy(false);}}}>{initial?'提交画作':'关闭画板'}</button>}</div>
       {initial&&room.initialDrawingCard&&<div className="initial-drawing-target"><img src={room.initialDrawingCard.image} alt={room.initialDrawingCard.name}/><div><strong>{userName} 的题目：{room.initialDrawingCard.name}</strong><p>请画出线索，不要直接写出卡名。</p></div></div>}
       <canvas ref={canvas} width={WIDTH} height={HEIGHT} className={drawer&&connected?'drawing-canvas can-draw':'drawing-canvas'} aria-label="共享画板" onPointerDown={event=>{if(!drawer||!connected||busy||pointerId.current!==null)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);pointerId.current=event.pointerId;pending.current=[point(event)];lastSent.current=null;schedule();}} onPointerMove={event=>{if(pointerId.current!==event.pointerId)return;const next=point(event);const previous=pending.current.at(-1)??lastSent.current;if(!previous||Math.hypot(next[0]-previous[0],next[1]-previous[1])>=2){pending.current.push(next);if(pending.current.length>=32)flush();else schedule();}}} onPointerUp={end} onPointerCancel={end}/>
+      {initial&&<DrawingProgress room={room}/>}
       <p>{warning|| (initial?'为上家画出线索，完成后点击“提交画作”，等待所有人完成。':drawer?'用一支笔画线，完成后点击“关闭画板”。':'画面会实时同步给房间里的所有人。')}</p>
     </div>
   </div>;
