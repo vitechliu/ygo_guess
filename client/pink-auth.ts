@@ -52,6 +52,18 @@ export function restorePink(): Promise<User | null> {
   }).finally(() => { running = undefined; });
   return running;
 }
+function scheduleAfterLogin(token: string): void {
+  const send = () => {
+    // A deferred notification must not use an account that has since been unlinked.
+    if (readPinkToken() !== token) return;
+    void request(BASE + '/api/cgv3/afterLogin', {
+      method: 'POST', credentials: 'omit', priority: 'low',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    }).catch(() => { toast.warning('粉红登录已成功，但登录后同步暂未完成'); });
+  };
+  if ('requestIdleCallback' in window) window.requestIdleCallback(send, { timeout: 2000 });
+  else setTimeout(send, 0);
+}
 export function loginPink(method: 'code' | 'password', fields: { code: string; username: string; password: string }): Promise<User> {
   return serialized(async () => {
     const result = await request<{ data: { access_token: string } }>(BASE + (method === 'code' ? '/api/auth/registerByCode' : '/api/auth/login'), {
@@ -62,6 +74,7 @@ export function loginPink(method: 'code' | 'password', fields: { code: string; u
     if (typeof token !== 'string' || !token || token.length > 6000 || /\s/.test(token)) throw new Error('粉红登录响应异常，请重试');
     const verified = await request<{ session: User }>('/api/pink/session', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
     saveToken(token);
+    scheduleAfterLogin(token);
     return verified.session;
   });
 }
