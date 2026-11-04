@@ -69,6 +69,23 @@ export class Hub {
     this.cleanupTimer.unref();
   }
   async close(){clearInterval(this.timer);clearInterval(this.cleanupTimer);for(const c of this.clients)c.ws.close(1001,'服务正在重启');await this.enqueue(()=>this.persistDrawingActivity());await this.opsReporter?.close();}
+  async updateIdentity(session:Session, persist:()=>Promise<void>, revoke=false){
+    return this.enqueue(async()=>{
+      const room=this.roomFor(session.playerId);
+      const prior=[...this.clients].find(c=>c.session.playerId===session.playerId)?.session.pink ?? room?.pinkMembers?.[session.playerId];
+      E.requireGame(!room||revoke||prior?.userId===session.pink?.userId,'请先离开房间再关联或切换账号');
+      E.requireGame(!room||room.players.find(p=>p.id===session.playerId)?.name===session.name,'请先离开房间再更改昵称');
+      const next=room?structuredClone(room):undefined;
+      if(next){
+        next.pinkMembers??={};
+        if(session.pink)next.pinkMembers[session.playerId]=session.pink;
+        else delete next.pinkMembers[session.playerId];
+      }
+      await persist();
+      if(next){await this.store.saveRoom(next);this.rooms.set(next.code,next);}
+      for(const c of this.clients)if(c.session.playerId===session.playerId){delete c.session.pink;Object.assign(c.session,session);}
+    });
+  }
   online(){return new Set([...this.clients].filter(c=>c.ws.readyState===WebSocket.OPEN).map(c=>c.session.playerId));}
   private onlineFor(r:RoomState){const online=this.online();if(this.debugEnabled)for(const player of r.players)if(!player.left&&player.id==='debug-bot:'+r.code)online.add(player.id);return online;}
   roomFor(id:string){return [...this.rooms.values()].find(r=>r.phase!=='closed'&&r.players.some(p=>p.id===id&&!p.left));}
@@ -135,6 +152,7 @@ export class Hub {
   }
   private requireMember(session:Session){const r=this.roomFor(session.playerId);E.requireGame(r,'你尚未进入房间');return r;}
   private precheck(session:Session,c:Command){
+    if(c.type==='create'||c.type==='join')E.requireGame(Boolean(session.name.trim()),'请先输入游戏昵称');
     E.requireGame(session.expiresAt>Date.now(),'会话已过期，请刷新页面');
     if(c.type==='debug'){
       E.requireGame(this.debugEnabled,'调试控制台仅在本地开发模式可用');
@@ -215,6 +233,9 @@ export class Hub {
         }
         if(c.type.startsWith('admin-'))audit={actor:session.playerId,action:c.type,target:r.code+('playerId'in c?':'+c.playerId:'')};
       }
+      if(c.type==='create'||c.type==='join'){r.pinkMembers??={};if(session.pink)r.pinkMembers[session.playerId]=session.pink;else delete r.pinkMembers[session.playerId];}
+      const oldRound=this.rooms.get(r.code)?.round??0;
+      if(r.round>oldRound){r.pinkParticipants=Object.fromEntries(r.entries.map(e=>[e.playerId,(r.pinkMembers?.[e.playerId]?.verifiedAt??0)>Date.now()-5*60000?r.pinkMembers![e.playerId].coreUserId:null]));}
       r.lastActivityAt=Date.now();
       r.version++;r.processed.push({key,at:r.lastActivityAt});r.processed=r.processed.slice(-500);
       if(previousRoom)await this.store.saveRooms([previousRoom,r]);

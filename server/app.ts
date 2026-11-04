@@ -10,8 +10,10 @@ import type { Session } from '../shared/types.js';
 import { Hub } from './hub.js';
 import { GameError } from './engine.js';
 import { configuredOpsReporter } from './ops-log.js';
+import { PinkAuthError, verifyPinkToken, pinkGameName, type PinkVerifier } from './pink-auth.js';
+import { VERSION_POLICY, isClientCompatible, updateRequiredMessage } from '../shared/version.js';
 
-export interface AppOptions { store:Store; cards:CardProvider; dev?:boolean; adminKey?:string; secureCookie?:boolean; hostGraceMs?:number }
+export interface AppOptions { store:Store; cards:CardProvider; dev?:boolean; adminKey?:string; secureCookie?:boolean; hostGraceMs?:number; pinkVerifier?:PinkVerifier }
 export async function createApp(options:AppOptions){
   const app=express(),server=createServer(app),hub=new Hub(options.store,options.cards,options.hostGraceMs,Boolean(options.dev)&&process.env.NODE_ENV!=='production',configuredOpsReporter());
   await hub.init();
@@ -36,15 +38,61 @@ export async function createApp(options:AppOptions){
   app.use((req,res,next)=>{res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Content-Type-Options','nosniff');if(req.path.startsWith('/api')||req.path.startsWith('/admin/entry'))res.setHeader('Cache-Control','no-store');if(!allowed(req.headers.origin,req.headers.host)){res.status(403).json({message:'不允许的来源'});return;}next();});
   app.use(express.json({limit:'8kb'}));
   const saveSession=async(res:express.Response,session:Session)=>{const token=randomBytes(32).toString('hex');await options.store.putSession(hash(token),session);res.cookie(cookieName,token,{httpOnly:true,sameSite:'lax',secure,maxAge:30*86400000,path:'/'});return session;};
+  const publicSession=(s:Session)=>({playerId:s.playerId,name:s.name,admin:s.admin,...(s.pink?{pink:{name:s.pink.name,verifiedAt:s.pink.verifiedAt}}:{})});
+  const replaceSession=async(req:express.Request,res:express.Response,session:Session,old:Session|null)=>{
+    const prior=tokens(req);
+    // A slow remote verification must not overwrite a newer nickname/login/logout.
+    if(old&&prior&&!await options.store.getSession(hash(prior)))throw new PinkAuthError(409,'登录状态已变更，请重试');
+    await saveSession(res,session);
+    if(prior&&old)await options.store.putSession(hash(prior),{...old,expiresAt:0});
+  };
   app.get('/api/health',(_req,res)=>res.json({ok:true,service:'YgoGuess'}));
-  app.get('/api/session',async(req,res)=>{const session=await getSession(req);res.json({session:session?{playerId:session.playerId,name:session.name,admin:session.admin}:null});});
+  app.get('/api/version',(_req,res)=>res.json(VERSION_POLICY));
+  app.get('/api/session',async(req,res)=>{const session=await getSession(req);res.json({session:session?publicSession(session):null});});
   app.post('/api/session',async(req,res)=>{
     if(!limit('guest:'+req.socket.remoteAddress,30)){res.status(429).json({message:'请求过于频繁'});return;}
     const name=z.string().trim().min(1).max(16).refine(s=>!/[\x00-\x1f\x7f]/.test(s)).parse(req.body.name);
     const old=await getSession(req);
     if(old&&hub.roomFor(old.playerId)&&old.name!==name){res.status(409).json({message:'请先离开房间再更改昵称'});return;}
-    const session=await saveSession(res,{playerId:old?.playerId??randomUUID(),name,admin:old?.admin??false,expiresAt:Date.now()+30*86400000});
-    res.json({session:{playerId:session.playerId,name:session.name,admin:session.admin}});
+    const session:Session={playerId:old?.playerId??randomUUID(),name,admin:old?.admin??false,pink:old?.pink,expiresAt:Date.now()+30*86400000};
+    await hub.updateIdentity(session,()=>replaceSession(req,res,session,old));
+    res.json({session:publicSession(session)});
+  });
+  app.post('/api/pink/session',async(req,res)=>{
+    if(!limit('pink:'+req.socket.remoteAddress,30)){res.status(429).json({message:'请求过于频繁，请稍后重试'});return;}
+    const token=req.headers.authorization?.match(/^Bearer ([^\s]{1,6000})$/)?.[1];
+    if(!token){res.status(401).json({message:'请提供粉红登录凭证'});return;}
+    const old=await getSession(req);
+    try{
+      const pink=await (options.pinkVerifier??verifyPinkToken)(token);
+      const same=old?.pink?.userId===pink.userId;
+      const session:Session={playerId:old?.playerId??randomUUID(),name:same?old!.name:pinkGameName(pink.name)||old?.name||'',admin:old?.admin??false,pink,expiresAt:Date.now()+30*86400000};
+      await hub.updateIdentity(session,()=>replaceSession(req,res,session,old));
+      res.json({session:publicSession(session)});
+    }catch(error){
+      if(error instanceof PinkAuthError){
+        if(old&&[401,403].includes(error.status)){
+          const current=await getSession(req);
+          if(current){
+            const session={...current};delete session.pink;
+            await hub.updateIdentity(session,async()=>{
+              const prior=hash(tokens(req)!);
+              if(!await options.store.getSession(prior))throw new PinkAuthError(409,'登录状态已变更，请重试');
+              await options.store.putSession(prior,session);
+            },true);
+          }
+        }
+        res.status(error.status).json({message:error.message});return;
+      }
+      if(error instanceof GameError){res.status(409).json({message:error.message});return;}
+      throw error;
+    }
+  });
+  app.delete('/api/pink/session',async(req,res)=>{
+    const old=await getSession(req);if(!old){res.json({session:null});return;}
+    const session={...old};delete session.pink;
+    await hub.updateIdentity(session,()=>replaceSession(req,res,session,old),true);
+    res.json({session:publicSession(session)});
   });
   app.get('/admin/entry',async(req,res)=>{
     const configured=options.adminKey??process.env.ADMIN_ENTRY_KEY;
@@ -54,7 +102,7 @@ export async function createApp(options:AppOptions){
     const a=Buffer.from(hash(value)),b=Buffer.from(hash(configured));
     if(!value||!timingSafeEqual(a,b)){res.status(403).send('管理员密钥无效');return;}
     const old=await getSession(req);
-    await saveSession(res,{playerId:old?.playerId??randomUUID(),name:old?.name??'管理员',admin:true,expiresAt:Date.now()+30*86400000});
+    await saveSession(res,{playerId:old?.playerId??randomUUID(),name:old?.name??'管理员',pink:old?.pink,admin:true,expiresAt:Date.now()+30*86400000});
     res.redirect(303,'/admin');
   });
   app.get('/api/cards/search',async(req,res)=>{
@@ -72,7 +120,24 @@ export async function createApp(options:AppOptions){
       if(!allowed(req.headers.origin,req.headers.host)){socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');socket.destroy();return;}
       const session=await getSession(req);
       if(!session){socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');socket.destroy();return;}
-      wss.handleUpgrade(req,socket,head,ws=>{hub.attach(ws,session);wss.emit('connection',ws,req);});
+      const clientVersion=new URL(req.url??'/', 'http://local').searchParams.get('version');
+      wss.handleUpgrade(req,socket,head,ws=>{
+        wss.emit('connection',ws,req);
+        if(!isClientCompatible(clientVersion)){
+          // Keep legacy clients connected so they do not retry forever. Never attach
+          // them to the hub, restore a room, or process a game command.
+          const reject=(id?:string)=>hub.send(ws,{type:'error',id,code:'UPDATE_REQUIRED',message:updateRequiredMessage(),versionPolicy:VERSION_POLICY});
+          reject();
+          ws.on('message',data=>{
+            let id:string|undefined;
+            try{const raw=JSON.parse(data.toString());if(typeof raw?.id==='string'&&raw.id.length<=80)id=raw.id;}catch{}
+            reject(id);
+          });
+          ws.on('error',()=>{});
+          return;
+        }
+        hub.attach(ws,session);
+      });
     })().catch(()=>socket.destroy());
   });
   const alive=new WeakSet<object>();
@@ -84,10 +149,11 @@ export async function createApp(options:AppOptions){
     const v=await createViteServer({server:{middlewareMode:true,hmr:{server}},appType:'spa'});
     vite=v;app.use(v.middlewares);
   }else{
-    app.use(express.static(path.resolve('dist/client')));
-    app.get('/{*splat}',(_req,res)=>res.sendFile(path.resolve('dist/client/index.html')));
+    app.use(express.static(path.resolve('dist/client'),{setHeaders:(res,file)=>{if(file.endsWith('.html'))res.setHeader('Cache-Control','no-store');}}));
+    app.get('/{*splat}',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.sendFile(path.resolve('dist/client/index.html'));});
   }
   app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
+    if(error instanceof PinkAuthError){res.status(error.status).json({message:error.message});return;}
     if(error instanceof z.ZodError){res.status(400).json({message:'输入格式不正确，请检查后重试'});return;}
     if(error instanceof GameError){res.status(503).json({message:error.message});return;}
     console.error('Request failed:',error instanceof Error?error.message:'unknown');res.status(500).json({message:'服务暂时不可用'});

@@ -14,8 +14,9 @@ export interface OpsEvent {
     initialDrawing: boolean;
     playerCount: number;
     playerNames: string[];
+    participants?: { playerName: string; coreUserId: number | null }[];
     reason?: string;
-    results?: { playerName: string; status: string; points: number; turns: number }[];
+    results?: { coreUserId?: number | null; playerName: string; status: string; points: number; turns: number }[];
   };
 }
 
@@ -51,7 +52,8 @@ export function gameEvents(before: RoomState | undefined, after: RoomState, reas
       initialDrawing: Boolean(after.settings.initialDrawing),
       playerCount: participants.length,
       playerNames: participants.map(e => playerName(e.playerId)),
-      ...(ended ? { reason, results: after.entries.map(e => ({ playerName: playerName(e.playerId), status: e.status, points: e.points, turns: e.turns })) } : {}),
+      participants: participants.map(e => ({ playerName: playerName(e.playerId), coreUserId: (started ? after : before)?.pinkParticipants?.[e.playerId] ?? null })),
+      ...(ended ? { reason, results: after.entries.map(e => ({ coreUserId: before?.pinkParticipants?.[e.playerId] ?? null, playerName: playerName(e.playerId), status: e.status, points: e.points, turns: e.turns })) } : {}),
     },
   }];
 }

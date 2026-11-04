@@ -1,3 +1,4 @@
+import {PinkLogin} from './PinkLogin';
 import {useState,useEffect} from 'react';
 import {Plus,Users,ArrowRight,Shuffle,Loader2,CircleHelp,Eye,MessageCircle,Sparkles,Trophy} from 'lucide-react';
 import {toast} from 'sonner';
@@ -11,6 +12,7 @@ export function Home({user,setUser,send,connected}:{user:User|null;setUser:(u:Us
  const [tab,setTab]=useState(initialCode?'join':'create'),[name,setName]=useState(user?.name??''),[code,setCode]=useState(initialCode.toUpperCase());
  const [settings,setSettings]=useState<Settings>({mode:'custom',attempts:3,itemCards:true}),[busy,setBusy]=useState(false),[pendingAction,setPendingAction]=useState<Action|null>(null);
  useEffect(()=>{if(!pendingAction||!connected)return;setPendingAction(null);send(pendingAction).catch(()=>{}).finally(()=>setBusy(false));},[connected,pendingAction,send]);
+ useEffect(()=>{setName(user?.name??'');},[user?.name]);
  const submit=async(e:React.FormEvent)=>{
   e.preventDefault();if(busy)return;setBusy(true);
   const action:Action=tab==='create'?{type:'create',settings}:{type:'join',code:code.trim().toUpperCase()};
@@ -18,7 +20,7 @@ export function Home({user,setUser,send,connected}:{user:User|null;setUser:(u:Us
  };
  return <main className="home"><div className="home-title"><span className="eyebrow"><span className="tiny-line"/> MULTIPLAYER CARD GAME</span><h1>入座，开一局。</h1><p>看得见别人的卡，猜不透自己的那张。</p></div>
  <div className="home-layout"><section className="panel entry-panel"><Tabs value={tab} onValueChange={setTab}><TabsList className="entry-tabs"><TabsTrigger value="create"><Plus size={17}/>创建房间</TabsTrigger><TabsTrigger value="join"><Users size={17}/>加入房间</TabsTrigger></TabsList><form onSubmit={submit} className="entry-form">
- <label className="field-label" htmlFor="nickname">你的昵称 <span>房间里的大家会这样称呼你</span></label><input id="nickname" className="text-input" value={name} onChange={e=>setName(e.target.value)} placeholder="起一个你喜欢的名字" maxLength={16} required autoComplete="nickname"/>
+ <label className="field-label" htmlFor="nickname">你的昵称 <span>房间里的大家会这样称呼你</span></label><div className="nickname-row"><input id="nickname" className="text-input" value={name} onChange={e=>setName(e.target.value)} placeholder="起一个你喜欢的名字" maxLength={16} required autoComplete="nickname"/><PinkLogin user={user} onChange={setUser} disabled={busy}/></div>
  <TabsContent value="create"><div className="field-label mode-label">选择玩法</div><RadioGroup value={settings.mode} onValueChange={v=>setSettings(s=>({...s,mode:v as Settings['mode'],initialDrawing:v==='custom'&&!!s.initialDrawing}))} className="mode-options">
  <label className={'mode-option '+(settings.mode==='custom'?'selected':'')}><RadioGroupItem value="custom" id="mode-custom"/><div className="mode-icon"><Users size={22}/></div><div><strong>好友出题</strong><p>每个人为下家挑选一张卡</p></div><span className="mode-tag">推荐</span></label>
  <label className={'mode-option '+(settings.mode==='random'?'selected':'')}><RadioGroupItem value="random" id="mode-random"/><div className="mode-icon"><Shuffle size={22}/></div><div><strong>随机分配</strong><p>从精选题库中抽取卡牌</p></div></label></RadioGroup>

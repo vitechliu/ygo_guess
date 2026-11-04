@@ -10,6 +10,18 @@ React / TypeScript / Vite 前端，Node.js / ws 服务端。本地使用文件�
 
 每次更新涉及 WebSocket/HTTP 消息结构或通信行为，以及回合、猜测、计分、房间管理等核心功能时，都要在发布前推进游戏版本号。采用语义化版本：不兼容的协议或存档变更升主版本，兼容的新功能升次版本，兼容的核心修复升修订版本。只改前端样式、布局或页面文案时不需要推进版本号。使用 `npm version patch --no-git-tag-version` 同时更新 `package.json` 和锁文件；需要升次版本或主版本时，把 `patch` 换成 `minor` 或 `major`。随后构建、测试并部署；不要单独修改页面上的版本文字。
 
+从 4.0.0 起，网页建立 WebSocket 时会携带构建版本；服务端在恢复房间、创建、加入和处理任何操作之前校验版本。`shared/version.ts` 的 `MIN_CLIENT_VERSION` 是最低兼容网页版本：普通兼容更新保持不变；关键规则或消息变更需要旧网页刷新时，将其提高到本次版本。主版本不同也会拦截，避免新页面误连旧服务。版本必须是正式的 `主.次.修订` 格式；缺失或非法版本按不兼容处理。此检查不替代 Cookie 身份验证。
+
+不兼容页面显示刷新入口并停止自动重连；刷新会保留房间邀请参数，增加缓存避让参数。4.0.0 之前的已打开页面无法补上新界面，但会收到原有错误提示“网页版本已过期或不兼容”，且不能进入或操作房间。首次上线此机制需要旧页面刷新。`GET /api/version` 返回当前版本与最低兼容版本，禁止缓存；生产入口 HTML 同样使用 `Cache-Control: no-store`。部署时 CDN/反向代理应遵守这些缓存头，并将前后端作为同一版本部署。
+
+## 可选粉红登录
+
+首页昵称框右侧可关联粉红账号，支持关联码或账号密码。需先关联机器人账号；成功后以 `core_user.name` 填入游戏昵称，之后仍可自由修改。游客入口保持不变，粉红登录不增加管理员权限或玩法奖励。
+
+JWT 保存在本站 localStorage，不设置前端到期时间；页面启动、重连和定期校验会向粉红服务验证，失效后需重新关联，网络暂时失败不会删除 token。密码和关联码不保存；请使用 HTTPS。清除 Cookie 后可以恢复粉红登录，但会生成新的游戏玩家，不恢复原房间或分数；同账号不同设备各自独立。
+
+关联入口支持解除关联、再登录其他账号。游戏服务端只保存已验证的身份摘要，不保存 JWT；账号 ID 不发送给其他房间玩家。详见 `docs/pink-login-design.md`。浏览器与游戏服务器都需能访问 `https://io2.vitechliu.com`，正式上线前需验证部署域名 CORS 与服务器连通性。
+
 ## 初始画猜
 
 创建房间时或开局前，房主可在“好友出题”模式勾选“初始画猜”（默认关闭，随机分配不可用）。每局流程为：为下家出题 → 为上家绘画 → 开始猜测。绘画者可看到上家的题目并使用画板绘制线索，全部提交后开始猜卡。
@@ -97,7 +109,7 @@ http://127.0.0.1:3131/admin/entry?key=你的密钥
 
 服务端校验后设置HttpOnly / SameSite Cookie并跳转到不含密钥的 /admin。管理员可以查看房间、强制跳过、移除成员、转移房主、解散房间；管理界面不显示任何答案。管理操作服务端鉴权并记录审计。
 
-普通玩家仅使用昵称游客身份；清除Cookie后不能仅凭昵称取回原身份。管理员会话默认有效30天；轮换密钥影响新的入口访问。立即撤销已有会话时，停服后删除数据库中对应管理员会话记录再重启。
+普通玩家可使用昵称游客身份或可选粉红登录；清除Cookie后不能仅凭昵称或粉红账号取回原游戏玩家身份。管理员会话默认有效30天；轮换密钥影响新的入口访问。立即撤销已有会话时，停服后删除数据库中对应管理员会话记录再重启。
 
 ## MySQL / Redis 与 Docker
 
@@ -137,7 +149,7 @@ OPS_LOG_SOURCE=ygo_guess
 
 `source` 默认为 `ygo_guess`；`game.started`（info）在房主开局成功时发送，好友出题模式从出题阶段即算开始；`game.ended` 在本局结算（success）或未结算就关闭/闲置清理（warning）时发送。退出、移除、切换房间、管理员操作及道具卡导致的结束均覆盖；回到准备、重复命令、存储失败和重启恢复不会重复上报。服务重启本身不结束对局。
 
-日志包含房间码、局数、模式、人数、时间、结束触发原因，以及参赛玩家昵称列表 `metadata.playerNames`；结束日志的 `metadata.results` 每项包含 `playerName`（昵称）、状态、分数和回合数。昵称取自服务端房间记录，包含本局离场者，不包含观战者；不包含玩家 ID、Cookie、聊天、答案或画作。`gameId` 以房间码、创建时间和局数关联同一局，`eventId` 可用于后续去重；接收端当前不按此字段自动去重。`reason` 是结束触发命令（如 `guess`、`give-up`、`leave`、`admin-close`），切换房间为 `switch-room`，闲置清理为 `idle-timeout`。
+日志包含房间码、局数、模式、人数、时间、结束触发原因，以及参赛玩家昵称列表 `metadata.playerNames`；结束日志的 `metadata.results` 每项包含 `playerName`（昵称）、状态、分数和回合数。昵称取自服务端房间记录，包含本局离场者，不包含观战者；另有 `metadata.participants`，每项包含 `playerName` 与 `coreUserId`；结束结果也包含 `coreUserId`。已验证粉红玩家使用机器人账号 ID（`core_user.id`），游客为 null；身份在开局冻结，离场、掉线和重启不改变本局归属。不包含游戏内部玩家 ID、网站用户 ID、JWT、Cookie、聊天、答案或画作。`gameId` 以房间码、创建时间和局数关联同一局，`eventId` 可用于后续去重；接收端当前不按此字段自动去重。`reason` 是结束触发命令（如 `guess`、`give-up`、`leave`、`admin-close`），切换房间为 `switch-room`，闲置清理为 `idle-timeout`。
 
 上报在状态持久化成功后异步进行，单次超时 2 秒，最多同时 20 个请求；失败、限流（接收端每来源 IP 每分钟 60 次）或容量耗尽只输出本地警告，不影响游戏。仅 HTTP 成功且响应 `status=success` 才视为接收端入库；不代表已同步到运维台。当前为尽力上报，无持久化队列、重试或历史补报，网络故障及进程异常退出可能丢日志，请勿用于要求零丢失的审计或计费。
 
@@ -152,6 +164,7 @@ npm run test:production
 
 - npm test：规则、隐私、并发幂等、权限、HTTP/WS、SQLite恢复、缓存回退。
 - test:e2e：真实百鸽和卡图，独立浏览器完成两局及第三人中途加入，含聊天、键盘选卡、刷新恢复、手机布局、管理员操作。Windows默认使用Edge；可设置BROWSER_PATH。其他系统可先执行 npx playwright install chromium。
+- `npx tsx tests/pink-auth.e2e.ts`：模拟粉红接口，覆盖桌面/手机登录、昵称修改、持久化、退出、凭证失效及未关联机器人账号的提示。
 - `npx tsx tests/invite.e2e.ts`：隔离浏览器验证邀请链接优先显示、无效目标保留原房间及切换成功；使用本地测试卡牌，不访问百鸽。
 - `npx tsx tests/last-survivor.e2e.ts`：使用本地测试题库，验证最后一名玩家、房主及管理员的跳过限制、刷新恢复和连续三次猜错后的结算；桌面及手机截图保存在 `test-results/last-survivor/`。
 - `npx tsx tests/item-cards.e2e.ts`：隔离浏览器验证禁止卡选人、增殖卡与假面卡的牌面效果、过期恢复和跳过回合；使用本地测试题库，截图保存在 `test-results/item-flow/`。
@@ -164,6 +177,6 @@ npm run test:production
 
 client：界面、WebSocket重连、卡牌搜索。server：规则、鉴权、卡牌代理、缓存和数据库适配。shared/types.ts：服务器状态、按玩家裁剪的公开状态及消息类型。components/ui保留Sites自带组件；config/card-pool.json是正式题库。
 
-HTTP：GET /api/health、GET/POST /api/session、GET /api/cards/search?q=&start=、GET /admin/entry?key=。WebSocket端点/ws；命令携带id、type，猜测、跳过和放弃本局另带turnId，出题另带setupId。房主移除成员另带playerId。服务器发送snapshot、ack、error、admin-rooms。身份来自Cookie，不信任客户端传入的权限。
+HTTP：GET /api/health、GET/POST /api/session、POST/DELETE /api/pink/session、GET /api/cards/search?q=&start=、GET /admin/entry?key=。WebSocket端点/ws；命令携带id、type，猜测、跳过和放弃本局另带turnId，出题另带setupId。房主移除成员另带playerId。服务器发送snapshot、ack、error、admin-rooms。身份来自Cookie，不信任客户端传入的权限。
 
 外部API请求在提交队列外执行，提交时重新验证游戏阶段。数据库失败不改变已广播状态，重复请求不重复扣次数/加分/跳回合。聊天纯文本，最多500字符，保留最近100条，无专门问答流程。

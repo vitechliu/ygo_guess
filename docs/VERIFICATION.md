@@ -65,3 +65,15 @@
 - 日志测试使用隔离内存 SQLite 和本机 HTTP 模拟接收端，覆盖连续开局/结算关联、重复命令、保存/删除失败、重启恢复、提前退出、切换房间、管理员解散、闲置清理、好友出题阶段开局，以及 HTTP 拒绝、超时和并发容量限制。
 - `OPS_LOG_REPORT_URL` 按用户要求留空，默认关闭上报；尚未配置真实远程入口、联调接收端或部署。此次未运行浏览器 E2E、Docker 或真实 MySQL/Redis 检查。
 - 昵称补充：开始/结束日志增加 `metadata.playerNames`，结束结果逐项增加 `playerName`；8 项日志定向测试及生产构建通过，覆盖昵称传输、观战者排除和离场玩家昵称保留。该补充沿用尚未发布的 3.4.0。
+
+## 2026-11-04：4.1.0 可选粉红登录
+
+环境：macOS、Node.js 24.22.2、Google Chrome（Playwright 无头），隔离 SQLite 与模拟粉红接口。
+
+- `npm test`：112 项通过；覆盖粉红身份校验、无机器人关联拒绝、失效与故障区分、改名保留身份、旧 Cookie 失效、已有 WebSocket 身份同步、慢验证不覆盖新昵称、本局身份冻结、退房与重启后的日志归属、公开快照不泄漏账号资料。
+- `npm run build`：类型检查、客户端及服务端构建通过；保留构建器的大包体积提示。
+- `npx tsx tests/pink-auth.e2e.ts`：1440px 桌面与 390px 手机流程通过，包括两种登录、机器人昵称填入、自定义昵称、JWT 持久化、刷新恢复房间、解除、失效凭证清理和无机器人账号提示；页面脚本错误为 0。截图：`test-results/pink-login-desktop.png`、`test-results/pink-login-mobile.png`。
+- `npx tsx tests/version.e2e.ts`：桌面/手机版本拦截、停止重试、缓存头、保留邀请参数刷新、创建和重连通过。
+- `npx tsx tests/invite.e2e.ts`：邀请优先显示、无效目标保留原房间、成功切换通过。
+
+测试未使用真实账号、密码或关联码；未验证生产 CORS、真实 JWT 配置、MySQL/Redis 服务或运维台实际展示，未部署。

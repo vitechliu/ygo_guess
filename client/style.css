@@ -108,3 +108,12 @@
 
 .initial-drawing-target{display:flex;align-items:center;gap:16px;margin-bottom:12px}.initial-drawing-target img{width:60px;height:88px;object-fit:contain}.initial-drawing-target p{margin:6px 0;color:var(--muted-foreground)}.drawing-view-dialog{width:min(900px,calc(100vw - 32px));max-width:900px}.drawing-view-dialog .drawing-canvas{width:100%;height:auto}.card-caption>button{margin-bottom:8px}
 .table-phase{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.turn-cycle{padding:4px 10px;border:1px solid #526e55;border-radius:5px;background:#23382f;color:#d7edc1;font-size:.75rem;font-weight:600;white-space:nowrap}
+
+.nickname-row { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+.nickname-row .text-input { min-width: 0; flex: 1; }
+.pink-link { flex-shrink: 0; height: auto; }
+.pink-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.pink-form { display: grid; gap: 12px; min-width: 0; }
+.pink-form label { font-size: 13px; font-weight: 600; }
+.pink-form p { overflow-wrap: anywhere; }
+.pink-error { color: #fda4af; font-size: 13px; overflow-wrap: anywhere; }

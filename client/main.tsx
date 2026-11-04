@@ -6,6 +6,7 @@ import {Layers3,Shield,WifiOff,Loader2,RefreshCw,Crown,X,SkipForward,ArrowRight}
 import {Button} from '@/components/ui/button';
 import {Toaster} from '@/components/ui/sonner';
 import {api,useGame,phaseNames,type User,type Send,type Action} from './game';
+import {restorePink,readPinkToken,syncPink,PINK_TOKEN_KEY} from './pink-auth';
 import {Home} from './Home';
 import {Room,Confirm,type Confirmation} from './Room';
 import {UpdateNotes} from './UpdateNotes';
@@ -16,15 +17,31 @@ function App(){
  const [user,setUser]=useState<User|null>(null),[loaded,setLoaded]=useState(false),[error,setError]=useState(''),[adminPage,setAdminPage]=useState(location.pathname==='/admin');
  const [invitedCode,setInvitedCode]=useState(()=>new URLSearchParams(location.search).get('room')?.toUpperCase()??'');
  const [switching,setSwitching]=useState(false);
- const game=useGame(user);
- useEffect(()=>{api<{session:User|null}>('/api/session').then(v=>setUser(v.session)).catch(e=>setError(e.message)).finally(()=>setLoaded(true));},[]);
+ const game=useGame(user,setUser);
+ useEffect(()=>{
+  let disposed=false;
+  const load=async()=>{
+   try{let current=(await api<{session:User|null}>('/api/session')).session;
+    if(readPinkToken()){try{current=await restorePink();}catch(e){toast.error((e as Error).message);current=(await api<{session:User|null}>('/api/session')).session;}}
+    else if(current?.pink){current=await syncPink();}
+    if(!disposed)setUser(current);
+   }catch(e){if(!disposed)setError((e as Error).message);}finally{if(!disposed)setLoaded(true);}
+  };void load();
+  const refresh=()=>{if(readPinkToken())void restorePink().then(u=>{if(!disposed&&u)setUser(u);}).catch(()=>{void api<{session:User|null}>('/api/session').then(v=>{if(!disposed)setUser(v.session);}).catch(()=>{});});};
+  const interval=setInterval(refresh,4*60000);
+  const visible=()=>{if(document.visibilityState==='visible')refresh();};
+  document.addEventListener('visibilitychange',visible);
+  const storage=(e:StorageEvent)=>{if(e.key===PINK_TOKEN_KEY||e.key===null)void syncPink().then(u=>{if(!disposed)setUser(u);}).catch(e=>toast.error((e as Error).message));};
+  window.addEventListener('storage',storage);window.addEventListener('online',refresh);
+  return()=>{disposed=true;clearInterval(interval);document.removeEventListener('visibilitychange',visible);window.removeEventListener('storage',storage);window.removeEventListener('online',refresh);};
+ },[]);
  useEffect(()=>{if(invitedCode&&game.room?.code===invitedCode){setInvitedCode('');history.replaceState(null,'','/');}},[invitedCode,game.room?.code]);
  const act=useCallback(async(a:Action)=>{try{await game.send(a);}catch(e){toast.error((e as Error).message);throw e;}},[game.send]);
  const dismissInvite=()=>{setInvitedCode('');history.replaceState(null,'','/');};
  const switchRoom=async()=>{setSwitching(true);try{await act({type:'join',code:invitedCode});}catch{}finally{setSwitching(false);}};
  return <div className="app-shell"><header className="topbar"><a href="/" className="wordmark" onClick={e=>{e.preventDefault();setAdminPage(false);dismissInvite();}}><span className="brand-icon"><Layers3 size={21}/></span><span>YGO<span className="brand-accent">GUESS</span><small>游戏王猜卡</small></span></a><div className="header-right"><span className="edition">和朋友一起，猜出那张卡</span>{user&&<span className="identity"><span className="avatar mini">{user.name.slice(0,1)}</span>{user.name}</span>}{user?.admin&&<Button variant="ghost" onClick={()=>setAdminPage(!adminPage)}><Shield size={16}/>{adminPage?'返回游戏':'管理房间'}</Button>}<UpdateNotes version={gameVersion}/></div></header>
- {loaded&&user&&!game.connected&&<div className="connection-banner" role="status"><WifiOff size={16}/>连接正在恢复，房间和猜测机会会保留。</div>}
- {!loaded?<main className="loading-screen"><Loader2 className="spin"/>正在连接牌桌…</main>:error?<main className="loading-screen"><p>{error}</p><Button onClick={()=>location.reload()}>重新连接</Button></main>:adminPage&&user?.admin?<Admin rooms={game.adminRooms} send={act} connected={game.connected}/>:game.room&&invitedCode&&game.room.code!==invitedCode?<main className="invite-switch"><section className="panel invite-switch-card"><span className="eyebrow">ROOM INVITATION</span><h1>朋友邀请你加入 {invitedCode}</h1><p>你目前还在房间 {game.room.code}。加入新房间后，你会退出原房间；原房间已获得的积分保留，未完成的本局记为 0 分。</p><div className="invite-switch-actions"><Button className="primary" disabled={!game.connected||switching} onClick={()=>void switchRoom()}>{switching?<Loader2 className="spin" size={17}/>:<ArrowRight size={17}/>}加入新房间</Button><Button variant="outline" onClick={dismissInvite}>留在原房间</Button></div></section></main>:game.room?<Room room={game.room} user={user!} send={act} connected={game.connected}/>:<Home user={user} setUser={setUser} send={act} connected={game.connected}/>}
+ {loaded&&user&&!game.connected&&!game.updateRequired&&<div className="connection-banner" role="status"><WifiOff size={16}/>连接正在恢复，房间和猜测机会会保留。</div>}
+ {game.updateRequired?<main className="invite-switch"><section className="panel invite-switch-card" role="alert"><h1>请更新网页后进入房间</h1><p>当前网页 v{gameVersion} 与服务端 v{game.updateRequired.currentVersion} 不兼容，最低支持 v{game.updateRequired.minClientVersion}。</p><p>请点击下方按钮刷新。若仍出现此提示，请清除此网站的缓存后重新打开。</p><Button className="primary" onClick={()=>{const url=new URL(location.href);url.searchParams.set('_refresh',Date.now().toString());location.replace(url.href);}}><RefreshCw size={17}/>刷新到最新版本</Button></section></main>:!loaded?<main className="loading-screen"><Loader2 className="spin"/>正在连接牌桌…</main>:error?<main className="loading-screen"><p>{error}</p><Button onClick={()=>location.reload()}>重新连接</Button></main>:adminPage&&user?.admin?<Admin rooms={game.adminRooms} send={act} connected={game.connected}/>:game.room&&invitedCode&&game.room.code!==invitedCode?<main className="invite-switch"><section className="panel invite-switch-card"><span className="eyebrow">ROOM INVITATION</span><h1>朋友邀请你加入 {invitedCode}</h1><p>你目前还在房间 {game.room.code}。加入新房间后，你会退出原房间；原房间已获得的积分保留，未完成的本局记为 0 分。</p><div className="invite-switch-actions"><Button className="primary" disabled={!game.connected||switching} onClick={()=>void switchRoom()}>{switching?<Loader2 className="spin" size={17}/>:<ArrowRight size={17}/>}加入新房间</Button><Button variant="outline" onClick={dismissInvite}>留在原房间</Button></div></section></main>:game.room?<Room room={game.room} user={user!} send={act} connected={game.connected}/>:<Home user={user} setUser={setUser} send={act} connected={game.connected}/>}
  <footer className="site-footer"><span>YgoGuess <span className="footer-sep">/</span> 好问题，让答案近一点</span><a href="https://ygocdb.com/api" target="_blank" rel="noreferrer">卡牌数据与图片由百鸽提供 ↗</a></footer><Toaster position="top-center" richColors/></div>;
 }
 function Admin({rooms,send,connected}:{rooms:AdminRoom[];send:Send;connected:boolean}){

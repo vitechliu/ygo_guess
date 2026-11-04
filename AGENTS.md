@@ -20,6 +20,14 @@ Tests use Node's `node:test` and `assert` through `tsx`. Run `npm test` for unit
 
 Recent commits use short `feat:` and `fix:` subjects, though history is not fully consistent. Prefer `feat: describe change` or `fix: describe issue`. In pull requests, explain behavior and affected flows, list commands run, link the relevant issue when one exists, and include screenshots for UI changes. Follow the version policy in `README.md`: bump both `package.json` and `package-lock.json` when an update changes WebSocket/HTTP message structure or communication behavior, or core turn, guessing, scoring, or room behavior. Use `npm version patch --no-git-tag-version` for compatible core fixes, `minor` for compatible features, and `major` for incompatible protocol or saved-data changes. Style-only updates do not need a version bump.
 
+## Client Version Compatibility
+
+`shared/version.ts` reads `GAME_VERSION` from `package.json` and defines `MIN_CLIENT_VERSION`, the oldest supported webpage version. For each release, assess whether cached older pages can safely use the updated protocol and rules. Keep the minimum unchanged for compatible updates; raise it to the release version when critical changes require older pages to refresh. Keep it no higher than `GAME_VERSION`, and update it on major releases. Maintain player-facing release notes in `client/update-notes.md`.
+
+WebSocket connections carry the webpage's build version. The server checks compatibility before restoring rooms or processing any game commands; missing or malformed versions, versions below the minimum, and different major versions are rejected. Preserve this server-side gate for creation, joining, and reconnects. Incompatible pages receive `UPDATE_REQUIRED`; the current UI stops reconnecting and offers a refresh that preserves invitation parameters. Legacy pages receive the existing text error.
+
+`GET /api/version` and production entry HTML must remain uncached (`Cache-Control: no-store`); deploy matching frontend/backend builds and preserve these headers through proxies/CDNs. When changing this mechanism, run `npm test` (including `tests/version.test.ts`), `npm run build`, and `npx tsx tests/version.e2e.ts` for desktop/mobile refresh and room recovery checks. Version checks do not replace Cookie authentication.
+
 ## Configuration & Security
 
 Keep secrets in `.env`, never commit them. Use `.env.example` for documented settings. Preserve server-side authorization and answer filtering when changing HTTP or WebSocket payloads; player identity comes from cookies, not client-supplied IDs.

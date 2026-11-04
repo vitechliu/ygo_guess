@@ -19,11 +19,12 @@ export interface DrawingSession { id: string; userId: string; drawerId: string }
 export interface InitialDrawing extends DrawingSession { strokes: DrawingStroke[]; submitted: boolean }
 export type DrawingPoint = [number, number];
 export interface DrawingStroke { points: DrawingPoint[] }
-export interface RoomState { code: string; hostId: string; settings: Settings; phase: Phase; round: number; turnCycle?: number; turnCycleStartPlayerId?: string; players: Player[]; entries: Entry[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; history: RoundResult[]; processed: { key: string; at: number }[]; createdAt: number; lastActivityAt?: number; visualEffects?: VisualEffects; finalCountdown?: FinalCountdown; music?: RoomMusic; drawing?: DrawingSession; initialDrawings?: InitialDrawing[] }
+export interface PinkIdentity { userId: number; coreUserId: number; name: string; verifiedAt: number }
+export interface RoomState { pinkMembers?: Record<string, PinkIdentity>; pinkParticipants?: Record<string, number | null>; code: string; hostId: string; settings: Settings; phase: Phase; round: number; turnCycle?: number; turnCycleStartPlayerId?: string; players: Player[]; entries: Entry[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; history: RoundResult[]; processed: { key: string; at: number }[]; createdAt: number; lastActivityAt?: number; visualEffects?: VisualEffects; finalCountdown?: FinalCountdown; music?: RoomMusic; drawing?: DrawingSession; initialDrawings?: InitialDrawing[] }
 export interface PlayerView extends Player { online: boolean; waiting: boolean; status?: Entry['status']; attempts: number; turns: number; points: number; card?: Card; submitted: boolean; failedByGuess?: boolean }
 export interface RoomView { code: string; hostId: string; settings: Settings; phase: Phase; round: number; turnCycle: number; canSkipTurn: boolean; players: PlayerView[]; turnPlayerId: string | null; turnId: string; setupId: string; version: number; chat: Chat[]; selfId: string; nextPlayerName?: string; mySubmittedCard?: Card; myItemCards: ItemCardInstance[]; history: RoundResult[]; visualEffects?: VisualEffects; reversalActive?: boolean; finalCountdownRemainingTurns?: number; debugEnabled?: boolean; music?: RoomMusic; drawing?: DrawingSession; drawingStrokes?: DrawingStroke[]; initialDrawingCard?: Card; initialDrawings?: InitialDrawing[]; drawingProgress?: { completed: number; total: number } }
 export interface AdminRoom { code: string; canSkipTurn: boolean; phase: Phase; round: number; hostId: string; turnId: string; turnPlayerId: string | null; players: { id: string; name: string; online: boolean }[] }
-export interface Session { playerId: string; name: string; admin: boolean; expiresAt: number }
+export interface Session { playerId: string; name: string; admin: boolean; expiresAt: number; pink?: PinkIdentity }
 export type Command =
   | { id: string; type: 'create'; settings: Settings }
   | { id: string; type: 'update-settings'; settings: Settings }
@@ -46,4 +47,4 @@ export type Command =
   | { id: string; type: 'admin-skip'; code: string; turnId: string }
   | { id: string; type: 'admin-kick' | 'admin-transfer'; code: string; playerId: string }
   | { id: string; type: 'admin-close'; code: string };
-export type ServerMessage = { type: 'snapshot'; room: RoomView | null } | { type: 'drawing-stroke'; drawingId: string; points: DrawingPoint[]; continuation: boolean } | { type: 'ack'; id: string } | { type: 'error'; id?: string; message: string } | { type: 'admin-rooms'; rooms: AdminRoom[] };
+export type ServerMessage = { type: 'snapshot'; room: RoomView | null } | { type: 'drawing-stroke'; drawingId: string; points: DrawingPoint[]; continuation: boolean } | { type: 'ack'; id: string } | { type: 'error'; id?: string; message: string; code?: 'UPDATE_REQUIRED'; versionPolicy?: import('./version.js').VersionPolicy } | { type: 'admin-rooms'; rooms: AdminRoom[] };
