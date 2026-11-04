@@ -2,7 +2,7 @@ import type { RoomState } from '../shared/types.js';
 
 export interface OpsEvent {
   level: 'info' | 'success' | 'warning';
-  event: 'game.started' | 'game.ended';
+  event: 'cg_game.started' | 'cg_game.ended';
   message: string;
   metadata: {
     eventId: string;
@@ -33,7 +33,7 @@ export function gameEvents(before: RoomState | undefined, after: RoomState, reas
   const started = after.round > (before?.round ?? 0) && active(after);
   const ended = active(before) && !active(after);
   if (!started && !ended) return [];
-  const event = started ? 'game.started' : 'game.ended';
+  const event = started ? 'cg_game.started' : 'cg_game.ended';
   const gameId = `${after.code}:${after.createdAt}:${after.round}`;
   const playerName = (id: string) => after.players.find(p => p.id === id)?.name
     ?? before?.players.find(p => p.id === id)?.name ?? '';

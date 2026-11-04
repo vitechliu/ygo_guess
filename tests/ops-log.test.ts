@@ -38,7 +38,7 @@ test('committed games report once with participant nicknames and omit player IDs
       const room = h.hub.rooms.get(h.code)!;
       await h.hub.handle(session(room.turnPlayerId!), command({ type: 'give-up', turnId: room.turnId }));
     }
-    assert.deepEqual(h.reporter.events.map(e => e.event), ['game.started', 'game.ended']);
+    assert.deepEqual(h.reporter.events.map(e => e.event), ['cg_game.started', 'cg_game.ended']);
     const [started, ended] = h.reporter.events;
     assert.equal(started.metadata.gameId, ended.metadata.gameId);
     assert.equal(ended.metadata.results?.length, 2);
@@ -99,7 +99,7 @@ for (const ending of ['leave', 'switch-room', 'admin-close', 'idle-timeout'] as 
         await h.hub.handle(session('host'), command({ type: 'leave' }));
       }
       await h.hub.cleanupRooms();
-      assert.deepEqual(h.reporter.events.map(e => e.event), ['game.started', 'game.ended']);
+      assert.deepEqual(h.reporter.events.map(e => e.event), ['cg_game.started', 'cg_game.ended']);
       assert.equal(h.reporter.events[1].metadata.reason, ending);
       assert.deepEqual(h.reporter.events[1].metadata.playerNames, ['房主昵称', '玩家昵称']);
       assert.deepEqual(h.reporter.events[1].metadata.results?.map(e => e.playerName), ['房主昵称', '玩家昵称']);
@@ -116,7 +116,7 @@ test('custom game starts during setup and leaving ends it before guessing', asyn
     assert.equal(h.hub.rooms.get(h.code)!.phase, 'setting');
     assert.equal(h.reporter.events[0].metadata.initialDrawing, true);
     await h.hub.handle(session('guest'), command({ type: 'leave' }));
-    assert.equal(h.reporter.events[1].event, 'game.ended');
+    assert.equal(h.reporter.events[1].event, 'cg_game.ended');
   } finally { await h.close(); }
 });
 
@@ -133,7 +133,7 @@ test('HTTP reporter sends expected JSON, isolates rejection/timeout, and bounds 
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as { port: number }).port;
   const warn = t.mock.method(console, 'warn', () => {});
-  const event: OpsEvent = { level: 'info', event: 'game.started', message: '对局开始', metadata: { eventId: 'a', gameId: 'b', occurredAt: Date.now(), roomCode: 'ABCDEF', round: 1, mode: 'random', initialDrawing: false, playerCount: 2, playerNames: ['房主昵称', '玩家昵称'] } };
+  const event: OpsEvent = { level: 'info', event: 'cg_game.started', message: '对局开始', metadata: { eventId: 'a', gameId: 'b', occurredAt: Date.now(), roomCode: 'ABCDEF', round: 1, mode: 'random', initialDrawing: false, playerCount: 2, playerNames: ['房主昵称', '玩家昵称'] } };
   try {
     const reporter = new HttpOpsReporter(`http://127.0.0.1:${port}/api/ops-logs/report`);
     reporter.report(event);

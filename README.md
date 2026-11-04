@@ -147,7 +147,7 @@ OPS_LOG_SOURCE=ygo_guess
 
 地址和端口仅为示例，应填写从游戏服务进程可访问的实际内网入口。若入口按域名选择站点，需使用能解析到内网的正确域名。Docker 容器内的 `127.0.0.1` 指向容器本身；请使用可达的宿主机内网地址或共享容器网络的服务名。Compose 会传入上述环境变量；留空 URL 关闭上报，修改后需重启服务或重建应用容器。
 
-`source` 默认为 `ygo_guess`；`game.started`（info）在房主开局成功时发送，好友出题模式从出题阶段即算开始；`game.ended` 在本局结算（success）或未结算就关闭/闲置清理（warning）时发送。退出、移除、切换房间、管理员操作及道具卡导致的结束均覆盖；回到准备、重复命令、存储失败和重启恢复不会重复上报。服务重启本身不结束对局。
+`source` 默认为 `ygo_guess`；`cg_game.started`（info）在房主开局成功时发送，好友出题模式从出题阶段即算开始；`cg_game.ended` 在本局结算（success）或未结算就关闭/闲置清理（warning）时发送。退出、移除、切换房间、管理员操作及道具卡导致的结束均覆盖；回到准备、重复命令、存储失败和重启恢复不会重复上报。服务重启本身不结束对局。
 
 日志包含房间码、局数、模式、人数、时间、结束触发原因，以及参赛玩家昵称列表 `metadata.playerNames`；结束日志的 `metadata.results` 每项包含 `playerName`（昵称）、状态、分数和回合数。昵称取自服务端房间记录，包含本局离场者，不包含观战者；另有 `metadata.participants`，每项包含 `playerName` 与 `coreUserId`；结束结果也包含 `coreUserId`。已验证粉红玩家使用机器人账号 ID（`core_user.id`），游客为 null；身份在开局冻结，离场、掉线和重启不改变本局归属。不包含游戏内部玩家 ID、网站用户 ID、JWT、Cookie、聊天、答案或画作。`gameId` 以房间码、创建时间和局数关联同一局，`eventId` 可用于后续去重；接收端当前不按此字段自动去重。`reason` 是结束触发命令（如 `guess`、`give-up`、`leave`、`admin-close`），切换房间为 `switch-room`，闲置清理为 `idle-timeout`。
 

@@ -19,7 +19,7 @@
 - `client/game.tsx`：WebSocket 使用 Cookie 身份，连接随玩家 ID、昵称、管理员状态变化重建。
 - `server/app.ts`：游客 Cookie 为 `ygoguess_session`，HttpOnly、SameSite=Lax，有效期 30 天；HTTP 与 WebSocket 都通过 Cookie 读取 Session。
 - `server/store.ts`：SQLite/MySQL 以 JSON 保存 Session 和房间，允许兼容性增加可选字段。
-- `server/hub.ts`、`server/ops-log.ts`：已提交的房间状态触发异步 `game.started` / `game.ended` 上报，包含昵称、结束结果，异常结束也覆盖。
+- `server/hub.ts`、`server/ops-log.ts`：已提交的房间状态触发异步 `cg_game.started` / `cg_game.ended` 上报，包含昵称、结束结果，异常结束也覆盖。
 - `server/engine.ts` 的 `view()` 会展开玩家对象，私有账号字段不能直接添加到 Player 后任其输出。
 - 接口文档：`/Users/vitech/after615/holyCityBackend/docs/frontend-auth.md`。
 - 已核对后端 `AuthController.php`、`Models/User.php`、`OpsLogReportController.php`、`Utils/OpsLogUtil.php` 和 `config/jwt.php`。本地 JWT 配置 `ttl=null`、无开放 refresh 接口；不能保证生产配置一致或 token 永久有效。
