@@ -30,7 +30,7 @@ export const ITEM_CARDS: Record<ItemCardId, ItemCard> = {
   },
   'maxx-c-card': {
     id: 'maxx-c-card', name: '增殖卡', category: 'monster', reference: '增殖的G',
-    image: '/maxx-c-item-card.webp', description: '可爱的G爬上所有人的卡牌，持续 3 分钟。', timing: 'own-turn', weight: 50,
+    image: '/maxx-c-item-card.webp', description: '可爱的G爬上所有人的卡牌，持续 30 秒。', timing: 'own-turn', weight: 25,
   },
   'mask-change-card': {
     id: 'mask-change-card', name: '假面卡', category: 'spell', reference: '假面变化',

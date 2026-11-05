@@ -3,14 +3,22 @@ import { Music2, Volume2, VolumeX } from 'lucide-react';
 import type { RoomMusic } from '../shared/types';
 import { PLAYABLE_MUSIC_TRACKS } from '../shared/music';
 
-const MUSIC_ENABLED_KEY = 'ygo-guess-music-enabled';
+import {AUDIO_ENABLED_KEY,AUDIO_SETTINGS_EVENT,audioEnabled,setAudioEnabled} from './audio-settings';
 const VOLUME = 0.18;
 
 export function MusicPlayer({ music }: { music?: RoomMusic }) {
   const audio = useRef<HTMLAudioElement>(null);
-  const [enabled, setEnabled] = useState(() => localStorage.getItem(MUSIC_ENABLED_KEY) !== 'false');
+  const [enabled, setEnabled] = useState(audioEnabled);
   const [blocked, setBlocked] = useState(false);
   const track = PLAYABLE_MUSIC_TRACKS.find(item => item.neteaseId === music?.trackId);
+
+  useEffect(() => {
+    const sync=()=>setEnabled(audioEnabled());
+    const storageChanged=(event:StorageEvent)=>{if(event.key===AUDIO_ENABLED_KEY||event.key===null)sync();};
+    window.addEventListener(AUDIO_SETTINGS_EVENT,sync);
+    window.addEventListener('storage',storageChanged);
+    return ()=>{window.removeEventListener(AUDIO_SETTINGS_EVENT,sync);window.removeEventListener('storage',storageChanged);};
+  },[]);
 
   useEffect(() => {
     const player = audio.current;
@@ -31,18 +39,16 @@ export function MusicPlayer({ music }: { music?: RoomMusic }) {
   }, [enabled, music?.activationId, track?.neteaseId]);
 
   const toggle = () => {
-    const next = !enabled;
-    localStorage.setItem(MUSIC_ENABLED_KEY, String(next));
-    setEnabled(next);
+    setAudioEnabled(!enabled);
   };
 
-  return <div className="music-player" role="group" aria-label="音乐功能">
+  return <div className="music-player" role="group" aria-label="音乐 / 音效">
     <audio ref={audio} preload="none" onError={() => setBlocked(true)} />
     <Music2 size={16} aria-hidden="true" />
-    <span>{music && track ? `《${track.title}》` : '音乐卡'}</span>
+    <span>{music && track ? `《${track.title}》` : '音乐 / 音效'}</span>
     {blocked && enabled && <small>播放受限，可关闭后重新开启</small>}
-    <button type="button" aria-pressed={enabled} aria-label={enabled ? '关闭音乐功能' : '开启音乐功能'} onClick={toggle}>
-      {enabled ? <Volume2 size={16} /> : <VolumeX size={16} />}{enabled ? '音乐开启' : '音乐关闭'}
+    <button type="button" aria-pressed={enabled} aria-label={enabled ? '关闭音乐 / 音效' : '开启音乐 / 音效'} onClick={toggle}>
+      {enabled ? <Volume2 size={16} /> : <VolumeX size={16} />}{enabled ? '声音开启' : '声音关闭'}
     </button>
   </div>;
 }

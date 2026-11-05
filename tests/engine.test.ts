@@ -35,6 +35,7 @@ test('item cards arrive on every third personal turn and can only be consumed on
  assert(r.entries.every(e=>e.itemCards?.length===0));
 });
 test('item card weights follow the catalogue and include music at weight 50 when configured',()=>{
+ assert.equal(ITEM_CARDS['maxx-c-card'].weight,25);
  assert.equal(ITEM_CARDS['scanner-card'].weight,50);
  assert.equal(ITEM_CARDS['music-card'].weight,50);
  let offset=0;
@@ -283,7 +284,8 @@ test('timed visual effects preserve answers and mask each player differently',()
  E.useItemCard(r,'p0',maxx.instanceId,r.turnId);
  assert.equal(r.chat.at(-1)?.kind,'item-card');
  assert(r.visualEffects?.roaches);
- assert(r.visualEffects.roaches.endsAt>Date.now()+179000);
+ assert(r.visualEffects.roaches.endsAt>Date.now()+29000);
+ assert(r.visualEffects.roaches.endsAt<=Date.now()+30000);
  const mask={instanceId:'mask-instance',cardId:'mask-change-card' as const};r.entries[0].itemCards!.push(mask);
  E.useItemCard(r,'p0',mask.instanceId,r.turnId);
  assert.equal(r.chat.at(-1)?.kind,'item-card');
@@ -294,6 +296,30 @@ test('timed visual effects preserve answers and mask each player differently',()
  assert(E.view(r,'p0',new Set()).visualEffects?.masks?.appearances.p0);
  E.expireVisualEffects(r,Date.now()+180001);
  assert.equal(r.visualEffects?.roaches,undefined);assert.equal(r.visualEffects?.masks,undefined);
+});
+test('maxx-c refreshes its 30-second duration, expires at the deadline and clears at round end',t=>{
+ t.mock.timers.enable({apis:['Date'],now:1000000});
+ const r=room(2);setup(r);
+ const use=(instanceId:string)=>{
+   r.entries[0].itemCards!.push({instanceId,cardId:'maxx-c-card'});
+   E.useItemCard(r,'p0',instanceId,r.turnId);
+ };
+ use('maxx-first');
+ const first=r.visualEffects!.roaches!;
+ assert.equal(first.endsAt,1030000);
+ assert.equal(r.chat.at(-1)?.text,'p0使用了增殖卡，可爱蟑螂出现了（30 秒）');
+ t.mock.timers.tick(10000);
+ use('maxx-refresh');
+ const refreshed=r.visualEffects!.roaches!;
+ assert.notEqual(refreshed.id,first.id);
+ assert.equal(refreshed.endsAt,1040000);
+ E.expireVisualEffects(r,refreshed.endsAt-1);
+ assert(r.visualEffects?.roaches);
+ E.expireVisualEffects(r,refreshed.endsAt);
+ assert.equal(r.visualEffects?.roaches,undefined);
+ use('maxx-round-end');
+ E.finishRound(r);
+ assert.equal(r.visualEffects?.roaches,undefined);
 });
 test('changeover targets one card, preserves answers, refreshes and expires separately from masks',()=>{
  const r=room(3);setup(r);

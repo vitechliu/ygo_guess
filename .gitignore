@@ -60,3 +60,4 @@ next-env.d.ts
 /.obsidian
 design.md
 /docs/reports
+/.idea

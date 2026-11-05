@@ -10,7 +10,9 @@ export interface MaskVisualEffect extends TimedVisualEffect { appearances: Recor
 export interface TimedCardAppearance extends TimedVisualEffect { appearance: MaskAppearance }
 export interface VisualEffects { roaches?: TimedVisualEffect; masks?: MaskVisualEffect; dragonmaidOutfits?: Record<string,TimedCardAppearance>; lightning?: TimedVisualEffect; fireballs?: Record<string,TimedVisualEffect>; distortion?: TimedVisualEffect; obscuredPlayerIds?: string[]; faceDown?: Record<string,TimedVisualEffect>; clownNames?: Record<string,TimedVisualEffect>; flowers?: TimedVisualEffect; cyclones?: Record<string,TimedVisualEffect>; storm?: TimedVisualEffect; meteors?: Record<string,TimedVisualEffect>; moonArrows?: Record<string,TimedVisualEffect>; cracks?: Record<string,TimedVisualEffect> }
 export interface FinalCountdown { remainingTurns: number; activatedTurnId: string }
-export interface Player { id: string; name: string; seat: number; score: number; ready: boolean; left: boolean }
+export type PlayerReactionKind = 'flower' | 'egg';
+export interface PlayerReaction { id: string; senderPlayerId: string; targetPlayerId: string; kind: PlayerReactionKind; quantity: 1 | 10; setupId: string }
+export interface Player { id: string; name: string; seat: number; score: number; reactionAllowance?: number; ready: boolean; left: boolean }
 export interface Entry { playerId: string; card?: Card; submitted: boolean; status: 'playing' | 'solved' | 'failed' | 'left'; attempts: number; turns: number; points: number; itemCards?: ItemCardInstance[]; skipNextTurns?: number; failedByGuess?: boolean; reversalTurnId?: string }
 export interface Chat { id: string; name: string; playerId?: string; recipientPlayerId?: string; text: string; time: number; system?: boolean; kind?: 'guess-correct' | 'guess-wrong' | 'item-card' }
 export interface RoundResult { round: number; entries: Entry[] }
@@ -40,6 +42,7 @@ export type Command =
   | { id: string; type: 'skip'; turnId: string }
   | { id: string; type: 'kick'; playerId: string }
   | { id: string; type: 'chat'; text: string }
+  | { id: string; type: 'player-reaction'; targetPlayerId: string; kind: PlayerReactionKind; quantity: 1 | 10; setupId: string }
   | { id: string; type: 'debug'; action: 'start-solo' | 'expire-effects' | 'countdown-to-one' }
   | { id: string; type: 'debug'; action: 'grant-card'; playerId: string; cardId: ItemCardId; makeTurn?: boolean }
   | { id: string; type: 'debug'; action: 'set-turn' | 'fail-by-guess' | 'clear-hand'; playerId: string }
@@ -47,4 +50,4 @@ export type Command =
   | { id: string; type: 'admin-skip'; code: string; turnId: string }
   | { id: string; type: 'admin-kick' | 'admin-transfer'; code: string; playerId: string }
   | { id: string; type: 'admin-close'; code: string };
-export type ServerMessage = { type: 'snapshot'; room: RoomView | null } | { type: 'drawing-stroke'; drawingId: string; points: DrawingPoint[]; continuation: boolean } | { type: 'ack'; id: string } | { type: 'error'; id?: string; message: string; code?: 'UPDATE_REQUIRED'; versionPolicy?: import('./version.js').VersionPolicy } | { type: 'admin-rooms'; rooms: AdminRoom[] };
+export type ServerMessage = { type: 'player-reaction'; reaction: PlayerReaction } | { type: 'snapshot'; room: RoomView | null } | { type: 'drawing-stroke'; drawingId: string; points: DrawingPoint[]; continuation: boolean } | { type: 'ack'; id: string } | { type: 'error'; id?: string; message: string; code?: 'UPDATE_REQUIRED'; versionPolicy?: import('./version.js').VersionPolicy } | { type: 'admin-rooms'; rooms: AdminRoom[] };

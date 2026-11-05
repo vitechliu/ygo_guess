@@ -32,6 +32,7 @@ const schemas=[
   z.object({...base,type:z.literal('give-up'),turnId}),
   z.object({...base,type:z.literal('skip'),turnId}),
   z.object({...base,type:z.literal('kick'),playerId}),
+  z.object({...base,type:z.literal('player-reaction'),targetPlayerId:playerId,kind:z.enum(['flower','egg']),quantity:z.union([z.literal(1),z.literal(10)]),setupId:z.string().uuid()}),
   z.object({...base,type:z.literal('chat'),text:z.string().trim().min(1).max(500)}),
   z.object({...base,type:z.literal('debug'),action:z.enum(['start-solo','expire-effects','countdown-to-one'])}),
   z.object({...base,type:z.literal('debug'),action:z.literal('grant-card'),playerId,cardId:debugCardId,makeTurn:z.boolean().optional()}),
@@ -224,6 +225,7 @@ export class Hub {
           case 'skip':E.skip(r,session.playerId,c.turnId,r.turnPlayerId!==session.playerId&&(r.hostId===session.playerId||session.admin));break;
           case 'kick':host();E.requireGame(c.playerId!==session.playerId,'房主不能移除自己');E.leave(r,c.playerId,this.online(),'房主');break;
           case 'leave':E.leave(r,session.playerId,this.online());break;
+          case 'player-reaction':E.sendPlayerReaction(r,session.playerId,c.targetPlayerId,c.kind,c.quantity,c.setupId);break;
           case 'chat':r.chat.push({id:c.id,playerId:session.playerId,name:r.players.find(p=>p.id===session.playerId)?.name??session.name,text:c.text,time:Date.now()});r.chat=r.chat.slice(-100);break;
           case 'debug':host();E.debugAction(r,c);break;
           case 'admin-skip':E.skip(r,session.playerId,c.turnId,true);break;
@@ -248,6 +250,11 @@ export class Hub {
       this.rooms.set(r.code,r);this.recent.set(key,Date.now());
       if(this.recent.size>3000){for(const [k,at]of this.recent)if(at<Date.now()-3600000||this.recent.size>3000)this.recent.delete(k);}
       this.broadcast();
+      // Transient event: emit only after saving, never replay on reconnect or command retry.
+      if(c.type==='player-reaction'){
+        const reaction={id:session.playerId+':'+c.id,senderPlayerId:session.playerId,targetPlayerId:c.targetPlayerId,kind:c.kind,quantity:c.quantity,setupId:r.setupId};
+        for(const client of this.clients)if(client.session.expiresAt>Date.now()&&this.roomFor(client.session.playerId)?.code===r.code)this.send(client.ws,{type:'player-reaction',reaction});
+      }
     });
   }
   private reportGameEvents(before:RoomState|undefined,after:RoomState,reason:string){

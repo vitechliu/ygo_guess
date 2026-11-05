@@ -1,3 +1,4 @@
+import {playPlayerReaction} from './reaction-events';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import type { AdminRoom, Command, RoomView, ServerMessage, Session } from '../shared/types';
@@ -40,6 +41,7 @@ export function useGame(user:User|null,onUser?:(user:User|null)=>void){
           }
           return {...current,drawingStrokes:[...strokes,{points:m.points}]};
         });
+        else if(m.type==='player-reaction')playPlayerReaction(m.reaction);
         else if(m.type==='admin-rooms')setAdminRooms(m.rooms);
         else if(m.type==='ack'||m.type==='error'){
           const p=m.id?pending.current.get(m.id):undefined;

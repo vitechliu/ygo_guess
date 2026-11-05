@@ -1,5 +1,5 @@
 import { randomUUID, randomInt } from 'node:crypto';
-import type { Card, RoomState, RoomView, Settings, Entry, ItemCardId, Chat, Command, MaskAppearance, DrawingPoint } from '../shared/types.js';
+import type { Card, RoomState, RoomView, Settings, Entry, ItemCardId, Chat, Command, MaskAppearance, DrawingPoint, PlayerReactionKind } from '../shared/types.js';
 import { ITEM_CARDS } from '../shared/item-cards.js';
 import { PLAYABLE_MUSIC_TRACKS, musicCandidates } from '../shared/music.js';
 import { MASKED_HEROES } from '../shared/masked-heroes.js';
@@ -134,6 +134,7 @@ export function startRound(r: RoomState, pool: Card[] = []) {
   requireGame(ps.length>=2,'至少需要2名玩家');
   requireGame(ps.every(p=>p.id===r.hostId||p.ready),'等待所有非房主玩家准备');
   if(r.settings.mode==='random') requireGame(new Set(pool.map(c=>c.cid)).size>=ps.length,'精选题库未配置或有效卡牌不足，请配置题库或使用出题模式');
+  for(const p of ps)p.reactionAllowance=100;
   r.initialDrawings=undefined;
   r.round++; r.setupId=randomUUID(); r.turnPlayerId=null; r.turnId='';r.visualEffects={};r.finalCountdown=undefined;r.music=undefined;r.drawing=undefined;
   r.entries=ps.map(p=>({playerId:p.id,submitted:false,status:'playing',attempts:r.settings.attempts,turns:0,points:0,itemCards:[]}));
@@ -143,6 +144,18 @@ export function startRound(r: RoomState, pool: Card[] = []) {
     beginGuessing(r);
   } else r.phase='setting';
   system(r,'第 '+r.round+' 局开始'+(r.phase==='setting'?'，请为下家选卡':''));
+}
+// Allow reactions through the result screen, independently of turns and item cards.
+export function sendPlayerReaction(r:RoomState,id:string,targetId:string,kind:PlayerReactionKind,quantity:1|10,setupId:string) {
+  requireGame(r.phase!=='lobby'&&r.phase!=='closed'&&r.round>0&&r.setupId===setupId,'本局已变化或尚未开始');
+  requireGame(kind==='flower'||kind==='egg','互动类型不正确');
+  requireGame(quantity===1||quantity===10,'互动数量不正确');
+  const sender=members(r).find(p=>p.id===id);
+  requireGame(sender,'你尚未进入房间');
+  requireGame(id!==targetId&&members(r).some(p=>p.id===targetId),'请选择房间里的其他玩家');
+  requireGame(r.entries.some(e=>e.playerId===id&&e.status!=='left'),'你将在下一局领取互动额度');
+  requireGame((sender.reactionAllowance??0)>=quantity,'互动额度不足');
+  sender.reactionAllowance=(sender.reactionAllowance??0)-quantity;
 }
 export function submitCard(r: RoomState, id: string, card: Card, setupId: string) {
   requireGame(r.phase==='setting'&&r.setupId===setupId,'出题阶段已变化，请刷新状态');
@@ -231,8 +244,8 @@ export function useItemCard(r:RoomState,id:string,instanceId:string,turnId:strin
       break;
     case 'maxx-c-card':
       r.visualEffects??={};
-      r.visualEffects.roaches={id:randomUUID(),endsAt:Date.now()+180000};
-      system(r,name+'使用了增殖卡，可爱蟑螂出现了（3 分钟）','item-card');
+      r.visualEffects.roaches={id:randomUUID(),endsAt:Date.now()+30000};
+      system(r,name+'使用了增殖卡，可爱蟑螂出现了（30 秒）','item-card');
       break;
     case 'mask-change-card': {
       const available=[...MASKED_HEROES];
