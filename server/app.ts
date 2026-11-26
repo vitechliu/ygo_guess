@@ -1,3 +1,4 @@
+import {createChatAdapter} from './chat-adapter.js';
 import express from 'express';
 import { createServer } from 'node:http';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -15,7 +16,7 @@ import { VERSION_POLICY, isClientCompatible, updateRequiredMessage } from '../sh
 
 export interface AppOptions { store:Store; cards:CardProvider; dev?:boolean; adminKey?:string; secureCookie?:boolean; hostGraceMs?:number; pinkVerifier?:PinkVerifier }
 export async function createApp(options:AppOptions){
-  const app=express(),server=createServer(app),hub=new Hub(options.store,options.cards,options.hostGraceMs,Boolean(options.dev)&&process.env.NODE_ENV!=='production',configuredOpsReporter());
+  const app=express(),server=createServer(app),hub=new Hub(options.store,options.cards,options.hostGraceMs,Boolean(options.dev)&&process.env.NODE_ENV!=='production',configuredOpsReporter(),createChatAdapter());
   await hub.init();
   const wss=new WebSocketServer({noServer:true,maxPayload:8192,perMessageDeflate:false});
   const secure=options.secureCookie??process.env.COOKIE_SECURE==='1';
@@ -46,6 +47,7 @@ export async function createApp(options:AppOptions){
     await saveSession(res,session);
     if(prior&&old)await options.store.putSession(hash(prior),{...old,expiresAt:0});
   };
+  app.get('/api/chat/config',(_req,res)=>res.json({url:process.env.CHAT_PUBLIC_URL}));
   app.get('/api/health',(_req,res)=>res.json({ok:true,service:'YgoGuess'}));
   app.get('/api/version',(_req,res)=>res.json(VERSION_POLICY));
   app.get('/api/session',async(req,res)=>{const session=await getSession(req);res.json({session:session?publicSession(session):null});});

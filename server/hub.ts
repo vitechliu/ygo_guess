@@ -1,3 +1,4 @@
+import {chatKey, createChatAdapter, type ChatState, type Delivery} from './chat-adapter.js';
 import { randomInt } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { z } from 'zod';
@@ -53,7 +54,7 @@ export class Hub {
   private away=new Map<string,number>(); private timer?:NodeJS.Timeout; private recent=new Map<string,number>();
   private cleanupTimer?:NodeJS.Timeout;
   private drawingActivity=new Map<string,number>();
-  constructor(private store:Store,private cards:CardProvider,private hostGraceMs=30000,private debugEnabled=false,private opsReporter?:OpsReporter){}
+  constructor(private store:Store,private cards:CardProvider,private hostGraceMs=30000,private debugEnabled=false,private opsReporter?:OpsReporter,private chatAdapter?:ReturnType<typeof createChatAdapter>){}
   async init(){
     for(const r of await this.store.loadRooms()){
       // Rooms saved before unlimited rounds may be at their old match boundary.
@@ -64,12 +65,14 @@ export class Hub {
       this.rooms.set(r.code,r);
     }
     await this.cleanupRooms();
+    this.chatAdapter?.start(()=>[...this.rooms.values()].filter(room=>room.phase!=='closed')
+      .map(room=>this.chatState(room)),job=>this.deliverChat(job));
     this.timer=setInterval(()=>void this.enqueue(async()=>{await this.persistDrawingActivity();await this.transferOfflineHosts();await this.expireVisualEffects();}).catch(()=>console.error('Room timer failed')),1000);
     this.timer.unref();
     this.cleanupTimer=setInterval(()=>void this.cleanupRooms().catch(()=>console.error('Room cleanup failed')),ROOM_CLEANUP_INTERVAL_MS);
     this.cleanupTimer.unref();
   }
-  async close(){clearInterval(this.timer);clearInterval(this.cleanupTimer);for(const c of this.clients)c.ws.close(1001,'服务正在重启');await this.enqueue(()=>this.persistDrawingActivity());await this.opsReporter?.close();}
+  async close(){clearInterval(this.timer);clearInterval(this.cleanupTimer);for(const c of this.clients)c.ws.close(1001,'服务正在重启');await this.enqueue(()=>this.persistDrawingActivity());await this.opsReporter?.close();await this.chatAdapter?.close();}
   async updateIdentity(session:Session, persist:()=>Promise<void>, revoke=false){
     return this.enqueue(async()=>{
       const room=this.roomFor(session.playerId);
@@ -140,6 +143,34 @@ export class Hub {
     this.drawingActivity.set(room.code,Date.now());
     for(const client of this.clients)if(this.roomFor(client.session.playerId)?.code===room.code)this.send(client.ws,{type:'drawing-stroke',drawingId:c.drawingId,points:c.points,continuation:c.continuation});
   }
+  private chatChannel(room:RoomState){
+    return 'ygo:'+chatKey(room.code+':'+room.createdAt).slice(0,32);
+  }
+  private chatState(room:RoomState):ChatState {
+    const members=E.members(room).filter(player=>this.onlineFor(room).has(player.id));
+    const owner=room.players.find(player=>player.id===room.hostId)?.name;
+    return {type:'channel.state',channel:this.chatChannel(room),name:owner?owner+'的猜卡房间':'猜卡房间',
+      phase:room.phase==='closed'?'closed':room.phase==='lobby'?'waiting':room.phase==='match-end'?'finished':'playing',
+      memberCount:members.length,maxLength:500,members:members.map(player=>{
+        const pink=room.pinkMembers?.[player.id];
+        return {key:pink?'core:'+pink.coreUserId:'guest:'+chatKey(player.id),name:player.name};
+      })};
+  }
+  private deliverChat(job:Delivery){
+    return this.enqueue(async()=>{
+      const room=[...this.rooms.values()].find(candidate=>this.chatChannel(candidate)===job.channel);
+      if(!room||room.phase==='closed'||!job.text.trim()||job.text.length>500)return '房间不可用';
+      if(room.chat.some(message=>message.id===job.id))return undefined;
+      const updated=structuredClone(room);
+      updated.chat=[...updated.chat,{id:job.id,text:job.text,name:job.actor.name,source:'pinkki' as const,time:job.time}].slice(-100);
+      updated.lastActivityAt=Date.now();
+      updated.version++;
+      await this.store.saveRoom(updated);
+      this.rooms.set(updated.code,updated);
+      this.broadcast();
+      return undefined;
+    });
+  }
   broadcast(){
     for(const [code,drawing] of this.drawings)if(this.rooms.get(code)?.drawing?.id!==drawing.id)this.drawings.delete(code);
     for(const c of this.clients){
@@ -147,6 +178,7 @@ export class Hub {
       const r=this.roomFor(c.session.playerId);
       const view=r?E.view(r,c.session.playerId,this.onlineFor(r),this.debugEnabled&&r.hostId===c.session.playerId):null;
       if(view?.drawing&&view.phase!=='drawing')view.drawingStrokes=this.drawings.get(r!.code)?.id===view.drawing.id?this.drawings.get(r!.code)!.strokes:[];
+      if(view&&r)view.chatChannel=this.chatChannel(r);
       this.send(c.ws,{type:'snapshot',room:view});
       if(c.session.admin)this.send(c.ws,{type:'admin-rooms',rooms:this.adminRooms()});
     }
@@ -248,6 +280,17 @@ export class Hub {
       }
       this.reportGameEvents(this.rooms.get(r.code),r,c.type);
       this.rooms.set(r.code,r);this.recent.set(key,Date.now());
+      if(this.chatAdapter){
+        if(previousRoom)this.chatAdapter.events(this.chatState(previousRoom));
+        const state=this.chatState(r);
+        if(c.type==='chat'){
+          const pink=r.pinkMembers?.[session.playerId];
+          const message=r.chat.at(-1)!;
+          this.chatAdapter.events(state,{type:'message.created',channel:state.channel,
+            id:chatKey(session.playerId+':'+c.id),actor:{key:pink?'core:'+pink.coreUserId:'guest:'+chatKey(session.playerId),
+              name:message.name},text:message.text});
+        }else this.chatAdapter.events(state);
+      }
       if(this.recent.size>3000){for(const [k,at]of this.recent)if(at<Date.now()-3600000||this.recent.size>3000)this.recent.delete(k);}
       this.broadcast();
       // Transient event: emit only after saving, never replay on reconnect or command retry.
@@ -270,6 +313,7 @@ export class Hub {
       await this.store.deleteRooms(expired.map(r=>r.code));
       for(const r of expired){
         this.reportGameEvents(r,{...r,phase:'closed'},'idle-timeout');
+        this.chatAdapter?.events({...this.chatState(r),phase:'closed',memberCount:0,members:[]});
         this.rooms.delete(r.code);
         this.away.delete(r.code);
         this.drawings.delete(r.code);

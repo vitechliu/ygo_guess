@@ -11,6 +11,10 @@ services:
       STORAGE: mysql
       CACHE: redis
       MYSQL_URL: "mysql://ygoguess:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}@mysql:3306/ygoguess"
+      CHAT_HUB_URL: "${CHAT_HUB_URL:-}"
+      CHAT_PUBLIC_URL: "${CHAT_PUBLIC_URL:-}"
+      CHAT_SERVICE_ID: "${CHAT_SERVICE_ID:-}"
+      CHAT_SERVICE_SECRET: "${CHAT_SERVICE_SECRET:-}"
       REDIS_URL: "redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379"
       ADMIN_ENTRY_KEY: "${ADMIN_ENTRY_KEY:-}"
       COOKIE_SECURE: "${COOKIE_SECURE:-0}"
